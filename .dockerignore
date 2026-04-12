@@ -1,0 +1,10 @@
+# Exclude VCS metadata
+.git
+# Python cache & compiled files
+**/__pycache__
+**/*.pyc
+# Log files
+*.log
+# Runtime data (mounted volumes) – not needed for image build
+data/
+workspace/

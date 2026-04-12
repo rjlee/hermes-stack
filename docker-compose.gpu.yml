@@ -1,0 +1,8 @@
+services:
+  hermes:
+    environment:
+      - CUDA_VISIBLE_DEVICES=all
+    devices:
+      - driver: nvidia
+        count: all
+        capabilities: [gpu]

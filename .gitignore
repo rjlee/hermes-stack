@@ -1,0 +1,22 @@
+# Ignore all .env files (contain secrets)
+**/.env
+# Keep .env.example templates (safe to commit)
+!**/.env.example
+# Optional: ignore workspace directory if you don't want it in repo
+workspace/
+# Python/bytecode artefacts
+__pycache__/
+*.pyc
+# OS artefacts
+.DS_Store
+Thumbs.db
+# IDE/editor artefacts
+.vscode/
+.idea/
+# Docker artefacts
+docker-compose.override.yml
+# Logs
+logs/
+# Temporary files
+*~
+*.swp

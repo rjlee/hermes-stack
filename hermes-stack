@@ -1,0 +1,251 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+BASE_IMAGE_NAME="nousresearch/hermes-agent:latest"
+
+print_help() {
+cat <<'EOF'
+hermes-stack – helper script for the hermes-stack project
+
+Usage: $0 {up|down|logs|restart|backup|restore|prune|status|check-env|upgrade-base|help} [options]
+
+Commands:
+  up               Start the stack. Rebuilds the Hermes image only if the
+                   base nosresearch/hermes-agent image has been updated.
+                   Use --force-rebuild to rebuild unconditionally.
+  down             Stop and remove containers, networks and default volumes.
+  logs             Follow live logs of all services.
+  restart          Shortcut for "down" then "up" (always rebuilds).
+  backup [--retain N] [--dry-run]
+                   Create a timestamped backup of data/ and workspace/.
+                   The script automatically keeps only the most recent N
+                   archives (default 7). Use --dry-run to list files that
+                   would be pruned without deleting them.
+  restore          Prompt for a backup file and extract it.
+  prune            Remove unused Docker images and volumes.
+  status           Show container status (health column).
+  check-env        Validate required environment variables.
+  upgrade-base     Pull the latest base image and display its digests.
+  help             Show this help message.
+EOF
+}
+
+# -------------------------------------------------
+# Digest helpers
+# -------------------------------------------------
+get_remote_digest() {
+    docker manifest inspect "$BASE_IMAGE_NAME" 2>/dev/null \
+        | grep -m1 '"digest"' \
+        | awk -F'"' '{print $4}'
+}
+
+resolve_base_image() {
+    local digest
+    digest=$(get_remote_digest)
+
+    if [[ -z "$digest" ]]; then
+        echo "❌ Failed to resolve remote digest"
+        exit 1
+    fi
+
+    echo "${BASE_IMAGE_NAME%@*}@${digest}"
+}
+
+needs_rebuild() {
+    local remote_digest local_digest
+
+    remote_digest=$(get_remote_digest)
+
+    local_digest=$(docker image inspect hermes-stack-hermes \
+        --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+        2>/dev/null || echo "")
+
+    [[ "$remote_digest" != "$local_digest" ]]
+}
+
+# -------------------------------------------------
+# Build
+# -------------------------------------------------
+build_image() {
+    local base_image base_digest
+
+    base_image=$(resolve_base_image)
+    base_digest="${base_image##*@}"
+
+    echo "🔨 Building with base image:"
+    echo "   $base_image"
+
+    docker compose --progress=plain build \
+        --no-cache \
+        --pull \
+        --build-arg BASE_IMAGE="$base_image" \
+        --build-arg BASE_DIGEST="$base_digest" \
+        --build-arg BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+
+# -------------------------------------------------
+# Commands
+# -------------------------------------------------
+case "${1:-}" in
+
+up)
+    FORCE=0
+    shift || true
+    for arg in "$@"; do
+        [[ "$arg" == "--force-rebuild" ]] && FORCE=1
+    done
+
+    if [[ $FORCE -eq 1 ]] || needs_rebuild; then
+        echo "🔨 Rebuilding Hermes image"
+        build_image
+    else
+        echo "✅ Base image unchanged – skipping rebuild"
+    fi
+
+    docker compose up -d
+    ;;
+
+restart)
+    docker compose down
+    echo "🔨 Forced rebuild (restart)"
+    build_image
+    docker compose up -d
+    ;;
+
+down)
+    docker compose down
+    ;;
+
+logs)
+    docker compose logs -f
+    ;;
+
+status)
+    echo "=== Container status ==="
+    docker compose ps
+    ;;
+
+# -------------------------------------------------
+# Backup / Restore (restored from your original)
+# -------------------------------------------------
+backup)
+    # Default retain count (override via BACKUP_RETAIN_COUNT env var)
+    RETAIN_COUNT=${BACKUP_RETAIN_COUNT:-7}
+    DRY_RUN=0
+    # Parse optional flags
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --retain)
+                shift
+                if [[ "$1" =~ ^[0-9]+$ ]]; then
+                    RETAIN_COUNT="$1"
+                else
+                    echo "⚠️  Invalid retain count: $1 – using default 7"
+                fi
+                ;;
+            --dry-run)
+                DRY_RUN=1
+                ;;
+            *)
+                echo "⚠️  Unknown backup option: $1"
+                ;;
+        esac
+        shift
+done
+
+    BACKUP_DIR="${PWD}/backup"
+    mkdir -p "$BACKUP_DIR"
+
+    TS=$(date '+%Y%m%d_%H%M%S')
+    ARCHIVE="${BACKUP_DIR}/hermes-stack_${TS}.tar.gz"
+
+    echo "📦 Creating backup → $ARCHIVE"
+    tar -czf "$ARCHIVE" data workspace 2>/dev/null
+    echo "✅ Backup created."
+
+    # Prune old backups, keep only the newest $RETAIN_COUNT files
+    TOTAL=$(ls -1 $BACKUP_DIR/hermes-stack_*.tar.gz 2>/dev/null | wc -l)
+    if [[ $TOTAL -gt $RETAIN_COUNT ]]; then
+        NUM_TO_DELETE=$((TOTAL - RETAIN_COUNT))
+        if [[ $DRY_RUN -eq 1 ]]; then
+            echo "🧪 Dry‑run: the following $NUM_TO_DELETE backup(s) would be removed:"
+            ls -1t $BACKUP_DIR/hermes-stack_*.tar.gz | tail -n $NUM_TO_DELETE
+        else
+            echo "🗑️  Pruning $NUM_TO_DELETE old backup(s) – keeping latest $RETAIN_COUNT"
+            ls -1t $BACKUP_DIR/hermes-stack_*.tar.gz | tail -n $NUM_TO_DELETE | xargs -r rm --
+            echo "✅ Prune complete: $NUM_TO_DELETE files removed, $RETAIN_COUNT newest retained."
+        fi
+    fi
+    ;;
+
+restore)
+    read -p "Enter backup file (path): " f
+    tar xzf "$f" -C .
+    echo "Restored from $f"
+    ;;
+
+# -------------------------------------------------
+# Docker cleanup (restored)
+# -------------------------------------------------
+prune)
+    echo "🧹 Pruning unused Docker resources..."
+    docker image prune -f
+    docker volume prune -f
+    echo "✅ Done"
+    ;;
+
+# -------------------------------------------------
+# Env validation (restored)
+# -------------------------------------------------
+check-env)
+    echo "Validating required environment variables..."
+    MISSING=0
+
+    [[ -f .env ]] && set -a && source .env && set +a
+    [[ -f data/hermes/.env ]] && set -a && source data/hermes/.env && set +a
+    [[ -f data/open-webui/.env ]] && set -a && source data/open-webui/.env && set +a
+
+    for var in API_SERVER_KEY WEBUI_SECRET_KEY OPENAI_API_KEY; do
+        if [[ -z "${!var:-}" ]]; then
+            echo "❌ $var missing"
+            ((MISSING++))
+        else
+            echo "✅ $var set"
+        fi
+    done
+
+    if (( MISSING )); then
+        echo "Some variables are missing"
+        exit 1
+    else
+        echo "All required variables are present."
+    fi
+    ;;
+
+upgrade-base)
+    echo "⬇️ Pulling latest base image..."
+    docker pull "$BASE_IMAGE_NAME"
+
+    echo "🌐 Remote digest:"
+    get_remote_digest
+
+    echo "💾 Local digest:"
+    docker image inspect "$BASE_IMAGE_NAME" \
+        --format='{{index .RepoDigests 0}}' \
+        | cut -d'@' -f2
+    ;;
+
+help|--help|-h|"")
+    print_help
+    ;;
+
+*)
+    echo "Unknown command: $1"
+    print_help
+    exit 1
+    ;;
+esac

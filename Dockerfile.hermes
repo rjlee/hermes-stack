@@ -1,0 +1,57 @@
+# -------------------------------------------------
+# 1️⃣ Use digest-pinned base image (injected by script)
+# -------------------------------------------------
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+# -------------------------------------------------
+# 2️⃣ Build arguments
+# -------------------------------------------------
+ARG BASE_DIGEST=unknown
+
+# -------------------------------------------------
+# 3️⃣ Metadata (used for rebuild detection)
+# -------------------------------------------------
+LABEL org.opencontainers.image.title="hermes-agent-custom"
+LABEL org.opencontainers.image.version="1.0.0"
+ARG BUILD_TIME
+LABEL org.opencontainers.image.created="${BUILD_TIME}"
+LABEL org.opencontainers.image.description="Hermes agent with OpenCode CLI baked in"
+LABEL org.opencontainers.image.revision="${BASE_DIGEST}"
+LABEL org.opencontainers.image.vendor="Your-Org-Name"
+LABEL org.opencontainers.image.source="https://github.com/your-repo/hermes-project"
+
+# -------------------------------------------------
+# 4️⃣ Avoid interactive prompts during build
+# -------------------------------------------------
+ENV DEBIAN_FRONTEND=noninteractive
+
+# -------------------------------------------------
+# 5️⃣ Install required system packages
+# -------------------------------------------------
+RUN apt-get update -qq && \
+    apt-get install -yqq --no-install-recommends \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# -------------------------------------------------
+# 6️⃣ Copy and run init scripts
+# -------------------------------------------------
+COPY hermes-init/ /tmp/hermes-init/
+
+RUN chmod +x /tmp/hermes-init/*.sh && \
+    for script in /tmp/hermes-init/*.sh; do \
+        echo "[hermes-build] Executing ${script} …"; \
+        "${script}"; \
+    done && \
+    rm -rf /tmp/hermes-init
+
+# -------------------------------------------------
+# 7️⃣ (Optional) Debug marker for rebuild visibility
+# Uncomment if needed
+# -------------------------------------------------
+# RUN echo "🔥 Hermes built at $(date)"
+
+# -------------------------------------------------
+# 8️⃣ Keep upstream ENTRYPOINT/CMD
+# -------------------------------------------------
