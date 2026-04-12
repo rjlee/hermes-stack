@@ -165,4 +165,4 @@ docker image rm hermes-project_hermes
 ```
 
 ---
-*Maintained by the Hermes‑OpenWebUI integration team.*
+*Maintained by @rjlee*
