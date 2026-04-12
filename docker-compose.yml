@@ -30,6 +30,17 @@ services:
     networks:
       - hermesnet
 
+  life360-mcp:
+    image: ghcr.io/rjlee/life360-mcp:latest
+    env_file:
+      - ./data/life360-mcp/.env
+    environment:
+      - LIFE360_HTTP_HOST=0.0.0.0
+    # No host ports - internal only, hermes connects via HTTP on port 8123
+    restart: unless-stopped
+    networks:
+      - hermesnet
+
   open-webui:
     image: ghcr.io/open-webui/open-webui:latest
     container_name: open-webui

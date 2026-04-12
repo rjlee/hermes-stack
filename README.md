@@ -5,12 +5,14 @@ This repository contains a Docker‑Compose setup that runs:
 - **OpenWebUI** (a ChatUI front‑end) on port `8001`
 - **Hermes** (the OpenAI‑compatible API server) on port `8642`
 - **CamoFox Browser** (headless browser for agent tasks) on port `9377` (internal only)
+- **Life360 MCP** (location tracking API) on port `8123` (internal only)
 - The **OpenCode CLI** is baked into the Hermes image via the `hermes‑init/` scripts.
 
 All services store their persistent data under a single top‑level `data/` directory:
 - `data/open-webui` → OpenWebUI backend files
 - `data/hermes`   → Hermes `/opt/data`
 - `data/camofox-browser` → CamoFox browser data
+- `data/life360-mcp` → Life360 MCP cache and state
 
 The `workspace/` directory is mounted for you to keep any local code or notebooks you want Hermes to see.
 
