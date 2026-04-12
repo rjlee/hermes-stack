@@ -14,12 +14,10 @@ hermes-stack – helper script for the hermes-stack project
 Usage: $0 {up|down|logs|restart|backup|restore|prune|status|check-env|upgrade-base|help} [options]
 
 Commands:
-  up               Start the stack. Rebuilds the Hermes image only if the
-                   base nosresearch/hermes-agent image has been updated.
-                   Use --force-rebuild to rebuild unconditionally.
+  up               Start the stack. Use --force-rebuild to rebuild the Hermes image.
   down             Stop and remove containers, networks and default volumes.
   logs             Follow live logs of all services.
-  restart          Shortcut for "down" then "up" (always rebuilds).
+  restart          Stop and start containers. Use --force-rebuild to rebuild.
   backup [--retain N] [--dry-run]
                    Create a timestamped backup of data/ and workspace/.
                    The script automatically keeps only the most recent N
@@ -99,20 +97,32 @@ up)
         [[ "$arg" == "--force-rebuild" ]] && FORCE=1
     done
 
-    if [[ $FORCE -eq 1 ]] || needs_rebuild; then
-        echo "🔨 Rebuilding Hermes image"
+    if [[ $FORCE -eq 1 ]]; then
+        echo "🔨 Rebuilding Hermes image (forced)"
         build_image
     else
-        echo "✅ Base image unchanged – skipping rebuild"
+        echo "✅ Skipping rebuild – use --force-rebuild to rebuild"
     fi
 
     docker compose up -d
     ;;
 
 restart)
+    FORCE=0
+    shift || true
+    for arg in "$@"; do
+        [[ "$arg" == "--force-rebuild" ]] && FORCE=1
+    done
+
     docker compose down
-    echo "🔨 Forced rebuild (restart)"
-    build_image
+
+    if [[ $FORCE -eq 1 ]]; then
+        echo "🔨 Rebuilding Hermes image (forced)"
+        build_image
+    else
+        echo "✅ Skipping rebuild – use --force-rebuild to rebuild"
+    fi
+
     docker compose up -d
     ;;
 
