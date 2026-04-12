@@ -37,11 +37,8 @@ cp .env.example .env
 ```
 
 ```bash
-# 2️⃣ Start the stack (smart rebuild)
-# By default, the Hermes image is rebuilt only when the upstream hermes-agent
-# base image has changed. Use `--force-rebuild` to force a rebuild regardless.
-./hermes-stack up            # normal start – rebuild only if needed
-./hermes-stack up --force-rebuild  # force rebuild of the Hermes image
+# 2️⃣ Start the stack
+./hermes-stack up
 ```
 
 ```bash
@@ -52,8 +49,8 @@ cp .env.example .env
 
 ```bash
 # 4️⃣ Test the OpenCode CLI inside the Hermes container (no API key needed)
-./hermes-stack status   # sanity‑check containers are up
-docker exec hermes which opencode   # Expected: /usr/local/bin/opencode
+./hermes-stack status
+docker exec hermes which opencode   # → /usr/local/bin/opencode
 docker exec hermes opencode --version
 ```
 
@@ -61,11 +58,11 @@ docker exec hermes opencode --version
 
 | Command | Description |
 |---------|-------------|
-| `./hermes-stack up` | Start the stack (rebuild only if base image changed) |
+| `./hermes-stack up` | Start the stack. Use --force-rebuild to rebuild the Hermes image. |
 | `./hermes-stack up --force-rebuild` | Force rebuild of Hermes image |
 | `./hermes-stack down` | Stop and remove containers |
 | `./hermes-stack logs` | Follow logs of all services |
-| `./hermes-stack restart` | Restart stack (down + up) |
+| `./hermes-stack restart` | Stop and start containers. Use --force-rebuild to rebuild. |
 | `./hermes-stack backup [--retain N] [--dry-run]` | Create a timestamped backup of `data/` and `workspace/`. Keeps the most recent 7 archives by default. |
 | `./hermes-stack restore` | Restore from a backup |
 | `./hermes-stack prune` | Remove unused Docker images and volumes |
@@ -129,14 +126,34 @@ The `opencode.json` configuration only needs to specify the model (already set t
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `hermes` container restarts repeatedly | Missing `API_SERVER_KEY` or malformed `.env` | Ensure `.env` contains a valid `API_SERVER_KEY` and run `./hermes-stack up` |
-| OpenWebUI cannot reach Hermes (`/v1` errors) | Network issue – services not on the same bridge | Both services are attached to `hermesnet`; ensure you didn’t modify the network name |
+| OpenWebUI cannot reach Hermes (`/v1` errors) | Network issue – services not on the same bridge | Both services are attached to `hermesnet`; ensure you didn't modify the network name |
 | Data not persisting after `docker compose down` | Used `docker compose down -v` which removes volumes | Omit `-v` flag; the `data/` directories are bind‑mounted, they stay on the host |
 | Need to add a new init step for Hermes | New script required at image build time | Drop a `*.sh` file into `hermes-init/` and rebuild (`./hermes-stack up`) |
 
 ## Extending the Stack
+
 - **Add GPU support**: create a `docker-compose.gpu.yml` with a devices reservation block and start with `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d`.
+
+- **MCP Servers**: Add MCP (Model Context Protocol) servers to extend Hermes with additional tools. Configure in `data/hermes/config.yaml`:
+
+```yaml
+mcp_servers:
+  life360:
+    url: http://life360-mcp:8123
+  # Add more MCP servers as needed:
+  # filesystem:
+  #   command: npx
+  #   args: ["-y", "@modelcontextprotocol/server-filesystem", "/path"]
+  # github:
+  #   command: npx
+  #   args: ["-y", "@modelcontextprotocol/server-github"]
+  #   env:
+  #     GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_..."
+```
+
 - **Separate OpenCode config**: the `opencode_cfg` volume stores `~/.config/opencode`. Edit its contents by running `docker exec -it hermes bash` and modifying `/root/.config/opencode/opencode.json`.
-- **Pin OpenCode version**: edit `hermes-init/install-opencode.sh` to use a fixed release URL instead of the “latest” endpoint.
+
+- **Pin OpenCode version**: edit `hermes-init/install-opencode.sh` to use a fixed release URL instead of the "latest" endpoint.
 
 ## Cleanup
 ```bash
@@ -149,15 +166,3 @@ docker image rm hermes-project_hermes
 
 ---
 *Maintained by the Hermes‑OpenWebUI integration team.*
-
-## 📂 Configurable workspace directory
-
-The stack now reads the `WORKSPACE_DIR` variable from the central `.env` file (or the automatically loaded environment). This directory is mounted into the containers at `/workspace` and is also used as the default project directory for the OpenCode CLI.
-
-If you want to change the location, edit the `.env` file:
-
-```dotenv
-WORKSPACE_DIR=./my‑custom‑workspace # any path relative to the repo root
-```
-
-The change will be picked up the next time you (re)start the stack.
