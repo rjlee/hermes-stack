@@ -58,11 +58,9 @@ docker exec hermes opencode --version
 
 | Command | Description |
 |---------|-------------|
-| `./hermes-stack up` | Start the stack. Use --force-rebuild to rebuild the Hermes image. |
-| `./hermes-stack up --force-rebuild` | Force rebuild of Hermes image |
-| `./hermes-stack down` | Stop and remove containers |
-| `./hermes-stack logs` | Follow logs of all services |
-| `./hermes-stack restart` | Stop and start containers. Use --force-rebuild to rebuild. |
+| `./hermes-stack up` | Start the stack. Use --upgrade to pull latest images and rebuild Hermes. |
+| `./hermes-stack up --upgrade` | Pull latest images and rebuild Hermes |
+| `./hermes-stack restart` | Stop and start containers. Use --upgrade to pull latest and rebuild. |
 | `./hermes-stack backup [--retain N] [--dry-run]` | Create a timestamped backup of `data/` and `workspace/`. Keeps the most recent 7 archives by default. |
 | `./hermes-stack restore` | Restore from a backup |
 | `./hermes-stack prune` | Remove unused Docker images and volumes |
@@ -73,7 +71,7 @@ docker exec hermes opencode --version
 
 ## Advanced Build Options
 
-When you rebuild the Hermes image (via `./hermes-stack up --force-rebuild` or `./hermes-stack restart`), the script passes two build‑args to the Dockerfile:
+When you upgrade the stack (via `./hermes-stack up --upgrade` or `./hermes-stack restart --upgrade`), the script pulls the latest Docker images and rebuilds the Hermes image, passing two build‑args to the Dockerfile:
 
 - **`BASE_IMAGE`** – the full image reference of the upstream Hermes Agent, pinned to a specific digest (e.g. `nosresearch/hermes-agent@sha256:abcd…`).
 - **`BASE_DIGEST`** – the raw digest string (`sha256:abcd…`) that is also written into the image as the OCI label `org.opencontainers.image.revision`.

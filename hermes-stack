@@ -14,10 +14,10 @@ hermes-stack – helper script for the hermes-stack project
 Usage: $0 {up|down|logs|restart|backup|restore|prune|status|check-env|upgrade-base|help} [options]
 
 Commands:
-  up               Start the stack. Use --force-rebuild to rebuild the Hermes image.
+  up               Start the stack. Use --upgrade to pull latest images and rebuild Hermes.
   down             Stop and remove containers, networks and default volumes.
   logs             Follow live logs of all services.
-  restart          Stop and start containers. Use --force-rebuild to rebuild.
+  restart          Stop and start containers. Use --upgrade to pull latest and rebuild.
   backup [--retain N] [--dry-run]
                    Create a timestamped backup of data/ and workspace/.
                    The script automatically keeps only the most recent N
@@ -91,36 +91,38 @@ build_image() {
 case "${1:-}" in
 
 up)
-    FORCE=0
+    UPGRADE=0
     shift || true
     for arg in "$@"; do
-        [[ "$arg" == "--force-rebuild" ]] && FORCE=1
+        [[ "$arg" == "--upgrade" ]] && UPGRADE=1
     done
 
-    if [[ $FORCE -eq 1 ]]; then
-        echo "🔨 Rebuilding Hermes image (forced)"
+    if [[ $UPGRADE -eq 1 ]]; then
+        echo "⬆️ Upgrading - pulling latest images and rebuilding Hermes"
+        docker compose pull
         build_image
     else
-        echo "✅ Skipping rebuild – use --force-rebuild to rebuild"
+        echo "✅ Skipping rebuild – use --upgrade to rebuild and pull latest"
     fi
 
     docker compose up -d
     ;;
 
 restart)
-    FORCE=0
+    UPGRADE=0
     shift || true
     for arg in "$@"; do
-        [[ "$arg" == "--force-rebuild" ]] && FORCE=1
+        [[ "$arg" == "--upgrade" ]] && UPGRADE=1
     done
 
     docker compose down
 
-    if [[ $FORCE -eq 1 ]]; then
-        echo "🔨 Rebuilding Hermes image (forced)"
+    if [[ $UPGRADE -eq 1 ]]; then
+        echo "⬆️ Upgrading - pulling latest images and rebuilding Hermes"
+        docker compose pull
         build_image
     else
-        echo "✅ Skipping rebuild – use --force-rebuild to rebuild"
+        echo "✅ Skipping rebuild – use --upgrade to rebuild and pull latest"
     fi
 
     docker compose up -d

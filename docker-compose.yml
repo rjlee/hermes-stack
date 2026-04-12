@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   camofox-browser:
     image: ghcr.io/rjlee/camofox-browser:latest
