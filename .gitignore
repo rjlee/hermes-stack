@@ -2,6 +2,10 @@
 **/.env
 # Keep .env.example templates (safe to commit)
 !**/.env.example
+
+# Runtime data (mounted volumes)
+data/
+workspace/
 # Optional: ignore workspace directory if you don't want it in repo
 workspace/
 # Python/bytecode artefacts
