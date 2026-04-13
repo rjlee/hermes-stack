@@ -191,6 +191,7 @@ install)
                         echo "  ⏭️  Skipping existing: $skill_category/$skill_name (use --force)"
                     else
                         mkdir -p "data/hermes/skills/$skill_category"
+                        rm -rf "$dest_dir"  # Remove existing to avoid stale files
                         cp -r "$skill" "$dest_dir"
                         echo "  ✅ Installed: $skill_category/$skill_name"
                     fi
