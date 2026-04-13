@@ -11,7 +11,7 @@ BASE_IMAGE_NAME="nousresearch/hermes-agent:latest"
 [[ -f .env ]] && set -a && source .env && set +a
 
 # Determine Hermes image based on CUSTOM_HERMES env var
-if [[ "${CUSTOM_HERMES:-true}" == "false" ]]; then
+if [[ "${CUSTOM_HERMES:-false}" == "true" ]]; then
     HERMES_IMAGE="${HERMES_IMAGE:-nousresearch/hermes-agent:latest}"
     export HERMES_IMAGE
     echo "📦 Using standard Hermes image: $HERMES_IMAGE"
@@ -110,7 +110,7 @@ up)
         [[ "$arg" == "--upgrade" ]] && UPGRADE=1
     done
 
-    if [[ "${CUSTOM_HERMES:-true}" == "false" ]]; then
+    if [[ "${CUSTOM_HERMES:-false}" == "true" ]]; then
         echo "📦 Using standard Hermes image - skipping build"
         docker compose pull
     elif [[ $UPGRADE -eq 1 ]]; then
@@ -133,7 +133,7 @@ restart)
 
     docker compose down
 
-    if [[ "${CUSTOM_HERMES:-true}" == "false" ]]; then
+    if [[ "${CUSTOM_HERMES:-false}" == "true" ]]; then
         echo "📦 Using standard Hermes image - pulling latest"
         docker compose pull
     elif [[ $UPGRADE -eq 1 ]]; then
