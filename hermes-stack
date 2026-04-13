@@ -25,7 +25,7 @@ print_help() {
 cat <<'EOF'
 hermes-stack – helper script for the hermes-stack project
 
-Usage: $0 {up|down|logs|restart|backup|restore|prune|status|check-env|upgrade-base|help} [options]
+Usage: $0 {up|down|logs|restart|backup|restore|prune|status|check-env|upgrade-base|install|help} [options]
 
 Commands:
   up               Start the stack. Use --upgrade to pull latest images and rebuild Hermes.
@@ -42,6 +42,7 @@ Commands:
   status           Show container status (health column).
   check-env        Validate required environment variables.
   upgrade-base     Pull the latest base image and display its digests.
+  install skills   Install skills from ./skills/ to ./data/hermes/skills/
   help             Show this help message.
 EOF
 }
@@ -162,6 +163,46 @@ logs)
 status)
     echo "=== Container status ==="
     docker compose ps
+    ;;
+
+# -------------------------------------------------
+# Install
+# -------------------------------------------------
+install)
+    TYPE="${2:-}"
+    FORCE=0
+    shift || true
+    shift || true  # Skip "install" and get next arg
+    for arg in "$@"; do
+        [[ "$arg" == "--force" ]] && FORCE=1
+    done
+
+    case "$TYPE" in
+        skills)
+            echo "📂 Installing skills..."
+            mkdir -p data/hermes/skills
+            if [[ -d "skills" ]]; then
+                # Copy each skill directory
+                for skill in skills/*/; do
+                    skill_name=$(basename "$skill")
+                    if [[ -d "data/hermes/skills/$skill_name" ]] && [[ $FORCE -eq 0 ]]; then
+                        echo "  ⏭️  Skipping existing skill: $skill_name (use --force to overwrite)"
+                    else
+                        cp -r "$skill" "data/hermes/skills/"
+                        echo "  ✅ Installed: $skill_name"
+                    fi
+                done
+                echo "Done installing skills."
+            else
+                echo "No skills/ directory found in project root."
+            fi
+            ;;
+        *)
+            echo "Usage: $0 install skills [--force]"
+            echo "  skills  - Install skills from ./skills/ to ./data/hermes/skills/"
+            echo "  --force - Overwrite existing skills"
+            ;;
+    esac
     ;;
 
 # -------------------------------------------------
