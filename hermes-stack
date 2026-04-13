@@ -123,7 +123,6 @@ up)
             echo "✅ Custom Hermes build ready – use --upgrade to rebuild"
         fi
     else
-        echo "📦 Using standard Hermes image"
         docker compose pull
     fi
 
@@ -148,7 +147,6 @@ restart)
             echo "✅ Custom Hermes build ready – use --upgrade to rebuild"
         fi
     else
-        echo "📦 Using standard Hermes image"
         docker compose pull
     fi
 
