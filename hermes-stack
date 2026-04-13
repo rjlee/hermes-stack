@@ -197,6 +197,10 @@ install)
                     fi
                 done
                 echo "Done installing skills."
+                echo ""
+                echo "ℹ️  If this skill requires configuration (e.g., MCP servers, API keys),"
+                echo "   edit the relevant config files in data/hermes/"
+                echo "ℹ️  Run './hermes-stack restart' to apply the new skill"
             else
                 echo "No skills/ directory found in project root."
             fi
