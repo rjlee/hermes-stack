@@ -36,6 +36,12 @@ services:
       - LIFE360_HTTP_HOST=0.0.0.0
     # No host ports - internal only, hermes connects via HTTP on port 8123
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-X", "POST", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"healthcheck\",\"version\":\"1.0\"}},\"id\":1}", "http://localhost:8123/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     networks:
       - hermesnet
 
@@ -91,6 +97,9 @@ services:
     mem_limit: 4g
     mem_reservation: 2g
     restart: unless-stopped
+    depends_on:
+      life360-mcp:
+        condition: service_healthy
     healthcheck:
       test: [
         "CMD",
