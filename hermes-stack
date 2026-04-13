@@ -182,14 +182,17 @@ install)
             echo "📂 Installing skills..."
             mkdir -p data/hermes/skills
             if [[ -d "skills" ]]; then
-                # Copy each skill directory
-                for skill in skills/*/; do
+                # Copy each subdirectory recursively (e.g., skills/mcp/ -> data/hermes/skills/mcp/)
+                for skill in skills/*/*/; do
+                    skill_category=$(basename "$(dirname "$skill")")
                     skill_name=$(basename "$skill")
-                    if [[ -d "data/hermes/skills/$skill_name" ]] && [[ $FORCE -eq 0 ]]; then
-                        echo "  ⏭️  Skipping existing skill: $skill_name (use --force to overwrite)"
+                    dest_dir="data/hermes/skills/$skill_category/$skill_name"
+                    if [[ -d "$dest_dir" ]] && [[ $FORCE -eq 0 ]]; then
+                        echo "  ⏭️  Skipping existing: $skill_category/$skill_name (use --force)"
                     else
-                        cp -r "$skill" "data/hermes/skills/"
-                        echo "  ✅ Installed: $skill_name"
+                        mkdir -p "data/hermes/skills/$skill_category"
+                        cp -r "$skill" "$dest_dir"
+                        echo "  ✅ Installed: $skill_category/$skill_name"
                     fi
                 done
                 echo "Done installing skills."
