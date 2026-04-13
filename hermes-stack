@@ -11,13 +11,16 @@ BASE_IMAGE_NAME="nousresearch/hermes-agent:latest"
 [[ -f .env ]] && set -a && source .env && set +a
 
 # Determine Hermes image based on CUSTOM_HERMES env var
+# CUSTOM_HERMES=false (default) -> use standard nousresearch/hermes-agent
+# CUSTOM_HERMES=true -> build custom hermes-stack-hermes
 if [[ "${CUSTOM_HERMES:-false}" == "true" ]]; then
+    HERMES_IMAGE="${HERMES_IMAGE:-hermes-stack-hermes}"
+    export HERMES_IMAGE
+    echo "🔨 Custom Hermes build enabled: $HERMES_IMAGE"
+else
     HERMES_IMAGE="${HERMES_IMAGE:-nousresearch/hermes-agent:latest}"
     export HERMES_IMAGE
     echo "📦 Using standard Hermes image: $HERMES_IMAGE"
-else
-    HERMES_IMAGE="${HERMES_IMAGE:-hermes-stack-hermes}"
-    export HERMES_IMAGE
 fi
 
 print_help() {
@@ -111,14 +114,17 @@ up)
     done
 
     if [[ "${CUSTOM_HERMES:-false}" == "true" ]]; then
-        echo "📦 Using standard Hermes image - skipping build"
-        docker compose pull
-    elif [[ $UPGRADE -eq 1 ]]; then
-        echo "⬆️ Upgrading - pulling latest images and rebuilding Hermes"
-        docker compose pull
-        build_image
+        if [[ $UPGRADE -eq 1 ]]; then
+            echo "⬆️ Upgrading custom Hermes - pulling and rebuilding"
+            # Pull other images but skip hermes (we'll build it)
+            docker compose pull --ignore-buildable hermes
+            build_image
+        else
+            echo "✅ Custom Hermes build ready – use --upgrade to rebuild"
+        fi
     else
-        echo "✅ Skipping rebuild – use --upgrade to rebuild and pull latest"
+        echo "📦 Using standard Hermes image"
+        docker compose pull
     fi
 
     docker compose up -d
@@ -134,14 +140,16 @@ restart)
     docker compose down
 
     if [[ "${CUSTOM_HERMES:-false}" == "true" ]]; then
-        echo "📦 Using standard Hermes image - pulling latest"
-        docker compose pull
-    elif [[ $UPGRADE -eq 1 ]]; then
-        echo "⬆️ Upgrading - pulling latest images and rebuilding Hermes"
-        docker compose pull
-        build_image
+        if [[ $UPGRADE -eq 1 ]]; then
+            echo "⬆️ Upgrading custom Hermes - pulling and rebuilding"
+            docker compose pull --ignore-buildable hermes
+            build_image
+        else
+            echo "✅ Custom Hermes build ready – use --upgrade to rebuild"
+        fi
     else
-        echo "✅ Skipping rebuild – use --upgrade to rebuild and pull latest"
+        echo "📦 Using standard Hermes image"
+        docker compose pull
     fi
 
     docker compose up -d
