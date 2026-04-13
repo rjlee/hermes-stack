@@ -6,7 +6,8 @@ This repository contains a Docker‑Compose setup that runs:
 - **Hermes** (the OpenAI‑compatible API server) on port `8642`
 - **CamoFox Browser** (headless browser for agent tasks) on port `9377` (internal only)
 - **Life360 MCP** (location tracking API) on port `8123` (internal only)
-- The **OpenCode CLI** is baked into the Hermes image via the `hermes‑init/` scripts.
+
+The stack uses the standard `nousresearch/hermes-agent` image by default. Set `CUSTOM_HERMES=true` to build a custom image with the **OpenCode CLI** baked in.
 
 All services store their persistent data under a single top‑level `data/` directory:
 - `data/open-webui` → OpenWebUI backend files
@@ -24,6 +25,8 @@ Create a `.env` file from the provided template and fill in the required values.
 | `API_SERVER_KEY` | **Yes** | – | Secret token required by the Hermes API. |
 | `WEBUI_SECRET_KEY` | **Yes** | – | Secret key for Open‑WebUI sessions. |
 | `OPENAI_API_KEY` | **Yes** | – | API key for OpenAI (or compatible) backend. |
+| `CUSTOM_HERMES` | No | `false` | Set `true` to build custom Hermes image with OpenCode. |
+| `HERMES_IMAGE` | No | `nousresearch/hermes-agent:latest` | Override Hermes image when `CUSTOM_HERMES=false`. |
 | `WORKSPACE_DIR` | No | `./workspace` | Directory mounted into containers for local code/notebooks. |
 | `ENABLE_SIGNUP` | No | `true` | Whether new users can self‑register in OpenWebUI. |
 | `WEBUI_AUTH` | No | `none` | Authentication mode for OpenWebUI (`none`, `ldap`, etc.). |
@@ -71,7 +74,9 @@ docker exec hermes opencode --version
 
 ## Advanced Build Options
 
-When you upgrade the stack (via `./hermes-stack up --upgrade` or `./hermes-stack restart --upgrade`), the script pulls the latest Docker images and rebuilds the Hermes image, passing two build‑args to the Dockerfile:
+By default, the stack uses the standard `nousresearch/hermes-agent:latest` image. Set `CUSTOM_HERMES=true` in your `.env` to build a custom image with OpenCode baked in.
+
+When you upgrade with `--upgrade`, the script pulls the latest Docker images and (if `CUSTOM_HERMES=true`) rebuilds the Hermes image, passing two build‑args to the Dockerfile:
 
 - **`BASE_IMAGE`** – the full image reference of the upstream Hermes Agent, pinned to a specific digest (e.g. `nosresearch/hermes-agent@sha256:abcd…`).
 - **`BASE_DIGEST`** – the raw digest string (`sha256:abcd…`) that is also written into the image as the OCI label `org.opencontainers.image.revision`.
@@ -111,7 +116,7 @@ Examples:
 
 ## OpenCode CLI
 
-The OpenCode CLI is bundled in the Hermes image. It uses the **free `gpt-5-nano` model**, which does **not require an API key**. Verify it works inside the container:
+The OpenCode CLI is **only available when `CUSTOM_HERMES=true`** (custom build). It uses the **free `gpt-5-nano` model**, which does **not require an API key**. Verify it works inside the container:
 
 ```bash
 docker exec hermes which opencode   # → /usr/local/bin/opencode
