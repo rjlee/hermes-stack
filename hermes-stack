@@ -16,11 +16,9 @@ BASE_IMAGE_NAME="nousresearch/hermes-agent:latest"
 if [[ "${CUSTOM_HERMES:-false}" == "true" ]]; then
     HERMES_IMAGE="${HERMES_IMAGE:-hermes-stack-hermes}"
     export HERMES_IMAGE
-    echo "🔨 Custom Hermes build enabled: $HERMES_IMAGE"
 else
     HERMES_IMAGE="${HERMES_IMAGE:-nousresearch/hermes-agent:latest}"
     export HERMES_IMAGE
-    echo "📦 Using standard Hermes image: $HERMES_IMAGE"
 fi
 
 print_help() {
