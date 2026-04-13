@@ -76,6 +76,7 @@ services:
       - hermesnet
 
   hermes:
+    image: ${HERMES_IMAGE:-hermes-stack-hermes}
     build:
       context: .
       dockerfile: Dockerfile.hermes

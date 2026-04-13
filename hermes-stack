@@ -7,6 +7,19 @@ cd "$SCRIPT_DIR"
 
 BASE_IMAGE_NAME="nousresearch/hermes-agent:latest"
 
+# Load environment variables
+[[ -f .env ]] && set -a && source .env && set +a
+
+# Determine Hermes image based on CUSTOM_HERMES env var
+if [[ "${CUSTOM_HERMES:-true}" == "false" ]]; then
+    HERMES_IMAGE="${HERMES_IMAGE:-nousresearch/hermes-agent:latest}"
+    export HERMES_IMAGE
+    echo "📦 Using standard Hermes image: $HERMES_IMAGE"
+else
+    HERMES_IMAGE="${HERMES_IMAGE:-hermes-stack-hermes}"
+    export HERMES_IMAGE
+fi
+
 print_help() {
 cat <<'EOF'
 hermes-stack – helper script for the hermes-stack project
@@ -97,7 +110,10 @@ up)
         [[ "$arg" == "--upgrade" ]] && UPGRADE=1
     done
 
-    if [[ $UPGRADE -eq 1 ]]; then
+    if [[ "${CUSTOM_HERMES:-true}" == "false" ]]; then
+        echo "📦 Using standard Hermes image - skipping build"
+        docker compose pull
+    elif [[ $UPGRADE -eq 1 ]]; then
         echo "⬆️ Upgrading - pulling latest images and rebuilding Hermes"
         docker compose pull
         build_image
@@ -117,7 +133,10 @@ restart)
 
     docker compose down
 
-    if [[ $UPGRADE -eq 1 ]]; then
+    if [[ "${CUSTOM_HERMES:-true}" == "false" ]]; then
+        echo "📦 Using standard Hermes image - pulling latest"
+        docker compose pull
+    elif [[ $UPGRADE -eq 1 ]]; then
         echo "⬆️ Upgrading - pulling latest images and rebuilding Hermes"
         docker compose pull
         build_image
