@@ -150,7 +150,12 @@ setup_life360()
     fi
 
     echo ""
-    echo "Run './hermes-stack restart' to apply changes."
+    read -p "Restart hermes-stack now? [y/N]: " RESTART
+    if [[ "$RESTART" == "y" ]] || [[ "$RESTART" == "Y" ]]; then
+        echo ""
+        echo "Restarting hermes-stack..."
+        docker compose restart hermes life360-mcp
+    fi
 }
 
 # -------------------------------------------------
