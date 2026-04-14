@@ -246,7 +246,7 @@ setup)
             setup_life360
             exit $?
             ;;
-        help|-h|"")
+        help|-h)
             echo "Usage: $0 setup [life360]"
             echo "  Set up secrets in .env and run hermes setup in container."
             echo "  life360  - Interactive Life360 MCP configuration"
