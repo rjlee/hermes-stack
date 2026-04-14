@@ -56,6 +56,7 @@ services:
       - ./data/open-webui/.env
     environment:
       OPENAI_API_BASE_URL: "http://hermes:8642/v1"
+      OPENAI_API_KEY: "${API_SERVER_KEY}"
     volumes:
       - ./data/open-webui:/app/backend/data
     restart: unless-stopped
