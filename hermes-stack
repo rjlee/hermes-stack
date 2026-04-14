@@ -44,7 +44,8 @@ Commands:
   upgrade-base     Pull the latest base image and display its digests.
   install skills   Install skills from ./skills/ to ./data/hermes/skills/
   cli             Spawn an interactive hermes container (CLI mode)
-  setup           Set up secrets in .env and run hermes setup in container
+  setup [life360]  Set up secrets in .env and run hermes setup in container
+                 life360 - Configure Life360 MCP authentication
   help             Show this help message.
 EOF
 }
@@ -100,6 +101,56 @@ build_image() {
         --build-arg BASE_IMAGE="$base_image" \
         --build-arg BASE_DIGEST="$base_digest" \
         --build-arg BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+
+# -------------------------------------------------
+# Life360 Setup
+# -------------------------------------------------
+setup_life360()
+{
+    echo "📍 Life360 MCP Configuration"
+    echo ""
+    echo "Choose authentication method:"
+    echo "  1) Skip (configure manually later)"
+    echo "  2) Authorization token (from Life360 app)"
+    echo "  3) Username + Password (OAuth)"
+    echo ""
+    read -p "Enter choice [1]: " CHOICE
+    CHOICE="${CHOICE:-1}"
+
+    ENV_FILE="data/life360-mcp/.env"
+
+    if [[ "$CHOICE" == "1" ]] || [[ "$CHOICE" == "skip" ]]; then
+        echo "Skipped. Edit $ENV_FILE manually when ready."
+        return 0
+    fi
+
+    echo ""
+
+    if [[ "$CHOICE" == "2" ]]; then
+        read -p "Authorization token: " LIFE360_AUTHORIZATION
+        if [[ -n "$LIFE360_AUTHORIZATION" ]]; then
+            echo "LIFE360_AUTHORIZATION=$LIFE360_AUTHORIZATION" > "$ENV_FILE"
+            echo "LIFE360_TOKEN_TYPE=Bearer" >> "$ENV_FILE"
+            echo "  ✅ Saved authorization token"
+        fi
+    elif [[ "$CHOICE" == "3" ]]; then
+        read -p "Username (email): " LIFE360_USERNAME
+        read -s -p "Password: " LIFE360_PASSWORD
+        echo ""
+        if [[ -n "$LIFE360_USERNAME" ]] && [[ -n "$LIFE360_PASSWORD" ]]; then
+            echo "LIFE360_USERNAME=$LIFE360_USERNAME" > "$ENV_FILE"
+            echo "LIFE360_PASSWORD=$LIFE360_PASSWORD" >> "$ENV_FILE"
+            echo "LIFE360_CLIENT_ID=life360_mobile_app" >> "$ENV_FILE"
+            echo "  ✅ Saved username/password"
+        fi
+    else
+        echo "Invalid choice: $CHOICE"
+        return 1
+    fi
+
+    echo ""
+    echo "Run './hermes-stack restart' to apply changes."
 }
 
 # -------------------------------------------------
@@ -184,11 +235,19 @@ cli)
     ;;
 
 setup)
-    if [[ "${2:-}" == "help" ]] || [[ "${2:-}" == "-h" ]]; then
-        echo "Usage: $0 setup"
-        echo "  Set up secrets in .env and run hermes setup in container."
-        exit 0
-    fi
+    SUBCOMMAND="${2:-}"
+    case "$SUBCOMMAND" in
+        life360)
+            setup_life360
+            exit $?
+            ;;
+        help|-h|"")
+            echo "Usage: $0 setup [life360]"
+            echo "  Set up secrets in .env and run hermes setup in container."
+            echo "  life360  - Interactive Life360 MCP configuration"
+            exit 0
+            ;;
+    esac
 
     echo "⚙️  Setting up secrets..."
 
@@ -400,7 +459,7 @@ prune)
     ;;
 
 # -------------------------------------------------
-# Env validation (restored)
+# Env validation
 # -------------------------------------------------
 check-env)
     echo "Validating required environment variables..."
