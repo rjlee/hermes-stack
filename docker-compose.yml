@@ -84,6 +84,7 @@ services:
       context: .
       dockerfile: Dockerfile.hermes
     container_name: hermes
+    user: "0:0"
     command: ["gateway", "run"]
     ports:
       - "8642:8642"

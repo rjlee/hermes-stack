@@ -233,9 +233,6 @@ setup)
 
     set -a && source .env && set +a
 
-    echo "  ✅ Fixing ownership of data/hermes/"
-    sudo chown -R $(id -u):$(id -g) data/hermes/ 2>/dev/null || true
-
     echo ""
     echo "🚀 Running hermes setup in container..."
 
