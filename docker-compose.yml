@@ -89,6 +89,7 @@ services:
     command: ["gateway", "run"]
     ports:
       - "8642:8642"
+      - "9119:9119"
     env_file:
       - .env
       - ./data/hermes/.env
