@@ -95,6 +95,8 @@ services:
       API_SERVER_ENABLED: "true"
       API_SERVER_HOST: 0.0.0.0
       OPENCODE_PROJECT_DIR: ${WORKSPACE_DIR:-./workspace}
+      HERMES_UID: ${HERMES_UID:-1000}
+      HERMES_GID: ${HERMES_GID:-1000}
     volumes:
       - ./data/hermes:/opt/data
       - ${WORKSPACE_DIR:-./workspace}:/workspace
