@@ -52,6 +52,7 @@ services:
     ports:
       - "8001:8080"
     env_file:
+      - .env
       - ./data/open-webui/.env
     environment:
       OPENAI_API_BASE_URL: "http://hermes:8642/v1"
@@ -87,11 +88,11 @@ services:
     ports:
       - "8642:8642"
     env_file:
+      - .env
       - ./data/hermes/.env
     environment:
       API_SERVER_ENABLED: "true"
       API_SERVER_HOST: 0.0.0.0
-      CAMOFOX_URL: "http://camofox-browser:9377"
       OPENCODE_PROJECT_DIR: ${WORKSPACE_DIR:-./workspace}
     volumes:
       - ./data/hermes:/opt/data

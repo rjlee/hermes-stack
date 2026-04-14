@@ -17,26 +17,11 @@ All services store their persistent data under a single top‑level `data/` dire
 
 The `workspace/` directory is mounted for you to keep any local code or notebooks you want Hermes to see.
 
-## Environment variables
-Create a `.env` file from the provided template and fill in the required values.  The table below shows the defaults for the optional variables.
-
-| Variable | Required? | Default | Description |
-|---|---|---|---|
-| `API_SERVER_KEY` | **Yes** | – | Secret token required by the Hermes API. |
-| `WEBUI_SECRET_KEY` | **Yes** | – | Secret key for Open‑WebUI sessions. |
-| `OPENAI_API_KEY` | **Yes** | – | API key for OpenAI (or compatible) backend. |
-| `CUSTOM_HERMES` | No | `false` | Set `true` to build custom Hermes image with OpenCode. |
-| `HERMES_IMAGE` | No | `nousresearch/hermes-agent:latest` | Override Hermes image when `CUSTOM_HERMES=false`. |
-| `WORKSPACE_DIR` | No | `./workspace` | Directory mounted into containers for local code/notebooks. |
-| `ENABLE_SIGNUP` | No | `true` | Whether new users can self‑register in OpenWebUI. |
-| `WEBUI_AUTH` | No | `none` | Authentication mode for OpenWebUI (`none`, `ldap`, etc.). |
-
 ## Quick Start
 
 ```bash
-# 1️⃣ Copy the environment template and fill in your secrets
-cp .env.example .env
-# edit .env and set the values (API keys, passwords, etc.)
+# 1️⃣ Set up secrets (generates API_SERVER_KEY, WEBUI_SECRET_KEY, etc.)
+./hermes-stack setup
 ```
 
 ```bash
@@ -46,16 +31,18 @@ cp .env.example .env
 
 ```bash
 # 3️⃣ Verify everything is healthy
-./hermes-stack logs   # follow the logs, or `docker compose ps`
-# Both services should show "healthy"
+./hermes-stack status
 ```
 
-```bash
-# 4️⃣ Test the OpenCode CLI inside the Hermes container (no API key needed)
-./hermes-stack status
-docker exec hermes which opencode   # → /usr/local/bin/opencode
-docker exec hermes opencode --version
-```
+## Environment variables
+
+The `./hermes-stack setup` command creates the necessary `.env` files and generates secrets automatically:
+
+| File | Variables | Description |
+|---|---|---|
+| `.env` | `API_SERVER_KEY`, `WORKSPACE_DIR` | Root config |
+| `data/hermes/.env` | `CAMOFOX_URL` | Hermes config |
+| `data/open-webui/.env` | `WEBUI_SECRET_KEY` | OpenWebUI config |
 
 ## Available Commands
 
@@ -70,6 +57,8 @@ docker exec hermes opencode --version
 | `./hermes-stack status` | Show container health |
 | `./hermes-stack check-env` | Validate required environment variables |
 | `./hermes-stack upgrade-base` | Pull latest Hermes‑Agent and show new digest |
+| `./hermes-stack cli` | Spawn an interactive hermes container (CLI mode) |
+| `./hermes-stack setup` | Set up secrets and run hermes setup in container |
 | `./hermes-stack help` | Show this help |
 
 ## Advanced Build Options

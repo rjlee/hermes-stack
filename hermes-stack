@@ -43,6 +43,8 @@ Commands:
   check-env        Validate required environment variables.
   upgrade-base     Pull the latest base image and display its digests.
   install skills   Install skills from ./skills/ to ./data/hermes/skills/
+  cli             Spawn an interactive hermes container (CLI mode)
+  setup           Set up secrets in .env and run hermes setup in container
   help             Show this help message.
 EOF
 }
@@ -160,9 +162,127 @@ logs)
     docker compose logs -f
     ;;
 
+cli)
+    if [[ "${2:-}" == "help" ]] || [[ "${2:-}" == "-h" ]]; then
+        echo "Usage: $0 cli"
+        echo "  Spawn an interactive hermes container (CLI mode)."
+        exit 0
+    fi
+
+    if [[ -t 0 ]]; then
+        DOCKER_FLAGS="-it"
+    else
+        DOCKER_FLAGS="-i"
+    fi
+
+    echo "🚀 Spawning interactive hermes container..."
+    docker run --rm $DOCKER_FLAGS \
+        --env-file .env \
+        -v "${WORKSPACE_DIR:-./workspace}:/workspace" \
+        -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
+        "$HERMES_IMAGE"
+    ;;
+
+setup)
+    if [[ "${2:-}" == "help" ]] || [[ "${2:-}" == "-h" ]]; then
+        echo "Usage: $0 setup"
+        echo "  Set up secrets in .env and run hermes setup in container."
+        exit 0
+    fi
+
+    echo "⚙️  Setting up secrets..."
+
+    if [[ ! -f .env ]] || ! grep -q "^WORKSPACE_DIR" .env 2>/dev/null; then
+        if [[ -f .env.example ]]; then
+            cp .env.example .env
+            echo "  ✅ Created .env from template"
+        fi
+    fi
+
+    if [[ ! -f data/hermes/.env ]]; then
+        echo "CAMOFOX_URL=http://camofox-browser:9377" > data/hermes/.env
+        echo "  ✅ Created data/hermes/.env with CAMOFOX_URL"
+    fi
+
+    for dir in data/*/; do
+        if [[ -f "$dir/.env.example" ]] && [[ ! -f "$dir/.env" ]]; then
+            cp "$dir/.env.example" "$dir/.env"
+            echo "  ✅ Created $dir.env from template"
+        fi
+    done
+
+    if [[ -z "${API_SERVER_KEY:-}" ]]; then
+        API_SERVER_KEY=$(openssl rand -hex 32)
+        if grep -q "^API_SERVER_KEY=" .env 2>/dev/null; then
+            sed -i "s/^API_SERVER_KEY=.*/API_SERVER_KEY=$API_SERVER_KEY/" .env
+        else
+            echo "API_SERVER_KEY=$API_SERVER_KEY" >> .env
+        fi
+        echo "  ✅ Generated API_SERVER_KEY"
+    else
+        echo "  ℹ️  API_SERVER_KEY already set"
+    fi
+
+    echo "  ✅ Setting WEBUI_SECRET_KEY in data/open-webui/.env"
+    WEBUI_SECRET_KEY=$(openssl rand -hex 32)
+    if grep -q "^WEBUI_SECRET_KEY=" data/open-webui/.env 2>/dev/null; then
+        sed -i "s/^WEBUI_SECRET_KEY=.*/WEBUI_SECRET_KEY=$WEBUI_SECRET_KEY/" data/open-webui/.env
+    else
+        echo "WEBUI_SECRET_KEY=$WEBUI_SECRET_KEY" >> data/open-webui/.env
+    fi
+
+    set -a && source .env && set +a
+
+    echo "  ✅ Fixing ownership of data/hermes/"
+    sudo chown -R $(id -u):$(id -g) data/hermes/ 2>/dev/null || true
+
+    echo ""
+    echo "🚀 Running hermes setup in container..."
+
+    if [[ -t 0 ]]; then
+        DOCKER_FLAGS="-it"
+    else
+        DOCKER_FLAGS="-i"
+    fi
+
+    docker run --rm $DOCKER_FLAGS \
+        --env-file .env \
+        -v "${WORKSPACE_DIR:-./workspace}:/workspace" \
+        -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
+        "$HERMES_IMAGE" \
+        setup
+    ;;
+
 status)
     echo "=== Container status ==="
     docker compose ps
+    ;;
+
+# -------------------------------------------------
+# Run interactive container
+# -------------------------------------------------
+run)
+    ARGS="${2:-bash}"
+    if [[ "$ARGS" == "help" ]] || [[ "$ARGS" == "-h" ]]; then
+        echo "Usage: $0 run [command]"
+        echo "  Spawn an interactive hermes container and run the given command."
+        echo "  Default command: bash"
+        echo ""
+        echo "Examples:"
+        echo "  $0 run              # interactive bash"
+        echo "  $0 run opencode     # run opencode"
+        echo "  $0 run pwd        # run pwd"
+        exit 0
+    fi
+
+    echo "🚀 Spawning hermes container with: $ARGS"
+    docker run --rm -it \
+        --network hermesstack_hermesnet \
+        --env-file .env \
+        -v "${WORKSPACE_DIR:-./workspace}:/workspace" \
+        -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
+        "$HERMES_IMAGE" \
+        $ARGS
     ;;
 
 # -------------------------------------------------
@@ -290,17 +410,23 @@ check-env)
     MISSING=0
 
     [[ -f .env ]] && set -a && source .env && set +a
-    [[ -f data/hermes/.env ]] && set -a && source data/hermes/.env && set +a
     [[ -f data/open-webui/.env ]] && set -a && source data/open-webui/.env && set +a
 
-    for var in API_SERVER_KEY WEBUI_SECRET_KEY OPENAI_API_KEY; do
+    for var in API_SERVER_KEY; do
         if [[ -z "${!var:-}" ]]; then
-            echo "❌ $var missing"
+            echo "❌ $var missing in .env"
             ((MISSING++))
         else
             echo "✅ $var set"
         fi
     done
+
+    if [[ -z "${WEBUI_SECRET_KEY:-}" ]]; then
+        echo "❌ WEBUI_SECRET_KEY missing in data/open-webui/.env"
+        ((MISSING++))
+    else
+        echo "✅ WEBUI_SECRET_KEY set"
+    fi
 
     if (( MISSING )); then
         echo "Some variables are missing"
