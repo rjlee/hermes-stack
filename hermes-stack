@@ -174,13 +174,12 @@ up)
     if [[ "${CUSTOM_HERMES:-false}" == "true" ]]; then
         if [[ $UPGRADE -eq 1 ]]; then
             echo "⬆️ Upgrading custom Hermes - pulling and rebuilding"
-            # Pull other images but skip hermes (we'll build it)
             docker compose pull --ignore-buildable hermes
             build_image
         else
             echo "✅ Custom Hermes build ready – use --upgrade to rebuild"
         fi
-    else
+    elif [[ $UPGRADE -eq 1 ]]; then
         docker compose pull
     fi
 
@@ -204,7 +203,7 @@ restart)
         else
             echo "✅ Custom Hermes build ready – use --upgrade to rebuild"
         fi
-    else
+    elif [[ $UPGRADE -eq 1 ]]; then
         docker compose pull
     fi
 
