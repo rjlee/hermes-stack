@@ -253,18 +253,35 @@ reset)
     fi
 
     SERVICES="${2:-hermes open-webui camofox-browser life360-mcp}"
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    BACKUP_DIR=".env.backup.$TIMESTAMP"
 
     echo "⚠️  Resetting data directories..."
+
+    # Backup .env files if they exist
+    if [[ -f .env ]]; then
+        mkdir -p "$BACKUP_DIR"
+        cp .env "$BACKUP_DIR/root.env"
+        echo "  💾 Backed up .env → $BACKUP_DIR/root.env"
+    fi
 
     for svc in $SERVICES; do
         case "$svc" in
             hermes)
+                if [[ -f data/hermes/.env ]]; then
+                    cp data/hermes/.env "$BACKUP_DIR/hermes.env"
+                    echo "  💾 Backed up data/hermes/.env → $BACKUP_DIR/hermes.env"
+                fi
                 rm -rf data/hermes/*
                 mkdir -p data/hermes
                 git checkout data/hermes/.gitkeep 2>/dev/null || true
                 echo "  ✅ Reset data/hermes"
                 ;;
             open-webui)
+                if [[ -f data/open-webui/.env ]]; then
+                    cp data/open-webui/.env "$BACKUP_DIR/open-webui.env"
+                    echo "  💾 Backed up data/open-webui/.env → $BACKUP_DIR/open-webui.env"
+                fi
                 rm -rf data/open-webui/*
                 mkdir -p data/open-webui
                 git checkout data/open-webui/.gitkeep data/open-webui/.env.example 2>/dev/null || true
@@ -277,6 +294,10 @@ reset)
                 echo "  ✅ Reset data/camofox-browser"
                 ;;
             life360-mcp)
+                if [[ -f data/life360-mcp/.env ]]; then
+                    cp data/life360-mcp/.env "$BACKUP_DIR/life360-mcp.env"
+                    echo "  💾 Backed up data/life360-mcp/.env → $BACKUP_DIR/life360-mcp.env"
+                fi
                 rm -rf data/life360-mcp/*
                 mkdir -p data/life360-mcp
                 git checkout data/life360-mcp/.gitkeep data/life360-mcp/.env.example 2>/dev/null || true
@@ -289,7 +310,12 @@ reset)
     echo "  ✅ Removed .env"
 
     echo ""
-    echo "✅ Reset complete. Run './hermes-stack setup' to reconfigure."
+    if [[ -d "$BACKUP_DIR" ]]; then
+        echo "✅ Reset complete. Backups saved to ./$BACKUP_DIR/"
+    else
+        echo "✅ Reset complete (no .env files to backup)."
+    fi
+    echo "Run './hermes-stack setup' to reconfigure."
     ;;
 
 setup)
