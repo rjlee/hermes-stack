@@ -7,7 +7,7 @@ This repository contains a Docker‑Compose setup that runs:
 - **CamoFox Browser** (headless browser for agent tasks) on port `9377` (internal only)
 - **Life360 MCP** (location tracking API) on port `8123` (internal only)
 
-The stack uses the standard `nousresearch/hermes-agent` image by default. Set `CUSTOM_HERMES=true` to build a custom image with the **OpenCode CLI** baked in.
+The stack uses the standard `nousresearch/hermes-agent` image. The **OpenCode CLI** is installed at runtime via the bootstrap script.
 
 All services store their persistent data under a single top‑level `data/` directory:
 - `data/open-webui` → OpenWebUI backend files
@@ -63,25 +63,13 @@ The `./hermes-stack setup` command creates the necessary `.env` files and genera
 
 ## Advanced Build Options
 
-By default, the stack uses the standard `nousresearch/hermes-agent:latest` image. Set `CUSTOM_HERMES=true` in your `.env` to build a custom image with OpenCode baked in.
-
-When you upgrade with `--upgrade`, the script pulls the latest Docker images and (if `CUSTOM_HERMES=true`) rebuilds the Hermes image, passing two build‑args to the Dockerfile:
-
-- **`BASE_IMAGE`** – the full image reference of the upstream Hermes Agent, pinned to a specific digest (e.g. `nosresearch/hermes-agent@sha256:abcd…`).
-- **`BASE_DIGEST`** – the raw digest string (`sha256:abcd…`) that is also written into the image as the OCI label `org.opencontainers.image.revision`.
-
-These arguments ensure the custom Hermes image is reproducible and that the `status` command can report the exact upstream version. The Dockerfile now also includes additional OCI metadata (`title`, `version`, `created`).
-
-If you need to build the image manually, you can run:
+By default, the stack uses the standard `nousresearch/hermes-agent:latest` image. You can override it by setting `HERMES_IMAGE` in your `.env`:
 
 ```bash
-docker build -f Dockerfile.hermes \
-    --build-arg BASE_IMAGE=nosresearch/hermes-agent@sha256:<digest> \
-    --build-arg BASE_DIGEST=sha256:<digest> \
-    -t hermes-stack-hermes .
+HERMES_IMAGE=nousresearch/hermes-agent:v2026.4.8
 ```
 
-Replace `<digest>` with the digest you obtain from `docker manifest inspect nosresearch/hermes-agent:latest`.
+When you upgrade with `--upgrade`, the script pulls the latest Docker images.
 
 ## Backup
 
@@ -105,7 +93,7 @@ Examples:
 
 ## OpenCode CLI
 
-The OpenCode CLI is **only available when `CUSTOM_HERMES=true`** (custom build). It uses the **free `gpt-5-nano` model**, which does **not require an API key**. Verify it works inside the container:
+The OpenCode CLI is installed at runtime via the bootstrap script. It uses the **free `gpt-5-nano` model**, which does **not require an API key**. Verify it works inside the container:
 
 ```bash
 docker exec hermes which opencode   # → /usr/local/bin/opencode
@@ -120,7 +108,7 @@ The `opencode.json` configuration only needs to specify the model (already set t
 | `hermes` container restarts repeatedly | Missing `API_SERVER_KEY` or malformed `.env` | Ensure `.env` contains a valid `API_SERVER_KEY` and run `./hermes-stack up` |
 | OpenWebUI cannot reach Hermes (`/v1` errors) | Network issue – services not on the same bridge | Both services are attached to `hermesnet`; ensure you didn't modify the network name |
 | Data not persisting after `docker compose down` | Used `docker compose down -v` which removes volumes | Omit `-v` flag; the `data/` directories are bind‑mounted, they stay on the host |
-| Need to add a new init step for Hermes | New script required at image build time | Drop a `*.sh` file into `hermes-init/` and rebuild (`./hermes-stack up`) |
+| Need to add a new init step for Hermes | New script required at container startup | Drop a `*.sh` file into `hermes-init/scripts/` and restart (`./hermes-stack restart`) |
 
 ## Extending the Stack
 
@@ -143,9 +131,7 @@ mcp_servers:
   #     GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_..."
 ```
 
-- **Separate OpenCode config**: the `opencode_cfg` volume stores `~/.config/opencode`. Edit its contents by running `docker exec -it hermes bash` and modifying `/root/.config/opencode/opencode.json`.
-
-- **Pin OpenCode version**: edit `hermes-init/install-opencode.sh` to use a fixed release URL instead of the "latest" endpoint.
+- **Pin OpenCode version**: edit `hermes-init/scripts/install-opencode.sh` to use a fixed release URL instead of the "latest" endpoint.
 
 ## Cleanup
 ```bash

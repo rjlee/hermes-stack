@@ -15,7 +15,7 @@ fi
 
 echo "🔧 Running bootstrap scripts from $SCRIPT_DIR ..."
 
-for script in "$(ls -1 "$SCRIPT_DIR"/*.sh 2>/dev/null | sort)"; do
+for script in $(ls -1 "$SCRIPT_DIR"/*.sh 2>/dev/null | sort); do
     if [[ -f "$script" ]]; then
         echo "▶️ Executing $(basename "$script")"
         bash "$script"

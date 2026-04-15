@@ -1,5 +1,7 @@
 # Ignore all .env files (contain secrets)
 **/.env
+# Also ignore backup files created by reset command
+**/.env.backup
 # Keep .env.example templates (safe to commit)
 !**/.env.example
 
