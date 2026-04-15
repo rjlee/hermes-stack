@@ -83,19 +83,7 @@ services:
     image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
     container_name: hermes
     user: "0:0"
-    command: ["sh", "-c", "cp -r /opt/hermes-init/* /opt/data/hermes-init/ 2>/dev/null || true; bash /opt/data/hermes-init/bootstrap.sh && gateway run"]
-    ports:
-      - "8642:8642"
-      - "9119:9119"
-    env_file:
-      - .env
-      - ./data/hermes/.env
-    environment:
-      API_SERVER_ENABLED: "true"
-      API_SERVER_HOST: 0.0.0.0
-      OPENCODE_PROJECT_DIR: ${WORKSPACE_DIR:-./workspace}
-      HERMES_UID: ${HERMES_UID:-1000}
-      HERMES_GID: ${HERMES_GID:-1000}
+    entrypoint: ["sh", "-c", "bash /opt/hermes-init/bootstrap.sh && exec /opt/hermes/docker/entrypoint.sh gateway run"]
     volumes:
       - ./data/hermes:/opt/data
       - ./hermes-init:/opt/hermes-init:ro
