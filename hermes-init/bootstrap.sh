@@ -16,12 +16,12 @@ fi
 echo "🔧 Running bootstrap scripts from $SCRIPT_DIR ..."
 
 for script in "$(ls -1 "$SCRIPT_DIR"/*.sh 2>/dev/null | sort)"; do
-    if [[ -x "$script" && -f "$script" ]]; then
+    if [[ -f "$script" ]]; then
         echo "▶️ Executing $(basename "$script")"
-        "$script"
+        bash "$script"
         echo "✅ $(basename "$script") finished"
     else
-        echo "⏭️ Skipping $(basename "$script") (not executable)"
+        echo "⏭️ Skipping $(basename "$script") (not a file)"
     fi
 done
 
