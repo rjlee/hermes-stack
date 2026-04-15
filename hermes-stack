@@ -45,7 +45,8 @@ Commands:
   install skills   Install skills from ./skills/ to ./data/hermes/skills/
   cli             Spawn an interactive hermes container (CLI mode)
   setup [life360]  Set up secrets in .env and run hermes setup in container
-                 life360 - Configure Life360 MCP authentication
+                  life360 - Configure Life360 MCP authentication
+  reset [services] Reset data directories (default: all services)
   help             Show this help message.
 EOF
 }
@@ -237,6 +238,58 @@ cli)
         -v "${WORKSPACE_DIR:-./workspace}:/workspace" \
         -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
         "$HERMES_IMAGE"
+    ;;
+
+reset)
+    if [[ "${2:-}" == "help" ]] || [[ "${2:-}" == "-h" ]]; then
+        echo "Usage: $0 reset [services]"
+        echo "  Reset data directories for services."
+        echo ""
+        echo "Examples:"
+        echo "  $0 reset                # reset all services"
+        echo "  $0 reset hermes        # reset only hermes"
+        echo "  $0 reset hermes open-webui  # reset hermes and open-webui"
+        exit 0
+    fi
+
+    SERVICES="${2:-hermes open-webui camofox-browser life360-mcp}"
+
+    echo "⚠️  Resetting data directories..."
+
+    for svc in $SERVICES; do
+        case "$svc" in
+            hermes)
+                rm -rf data/hermes/*
+                mkdir -p data/hermes
+                git checkout data/hermes/.gitkeep 2>/dev/null || true
+                echo "  ✅ Reset data/hermes"
+                ;;
+            open-webui)
+                rm -rf data/open-webui/*
+                mkdir -p data/open-webui
+                git checkout data/open-webui/.gitkeep data/open-webui/.env.example 2>/dev/null || true
+                echo "  ✅ Reset data/open-webui"
+                ;;
+            camofox-browser)
+                rm -rf data/camofox-browser/*
+                mkdir -p data/camofox-browser
+                git checkout data/camofox-browser/.gitkeep data/camofox-browser/.env.example 2>/dev/null || true
+                echo "  ✅ Reset data/camofox-browser"
+                ;;
+            life360-mcp)
+                rm -rf data/life360-mcp/*
+                mkdir -p data/life360-mcp
+                git checkout data/life360-mcp/.gitkeep data/life360-mcp/.env.example 2>/dev/null || true
+                echo "  ✅ Reset data/life360-mcp"
+                ;;
+        esac
+    done
+
+    rm -f .env
+    echo "  ✅ Removed .env"
+
+    echo ""
+    echo "✅ Reset complete. Run './hermes-stack setup' to reconfigure."
     ;;
 
 setup)
