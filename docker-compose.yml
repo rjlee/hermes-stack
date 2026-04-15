@@ -81,12 +81,9 @@ services:
 
   hermes:
     image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
-    build:
-      context: .
-      dockerfile: Dockerfile.hermes
     container_name: hermes
     user: "0:0"
-    command: ["gateway", "run"]
+    command: ["sh", "-c", "cp -r /opt/hermes-init/* /opt/data/hermes-init/ 2>/dev/null || true; bash /opt/data/hermes-init/bootstrap.sh && gateway run"]
     ports:
       - "8642:8642"
       - "9119:9119"
@@ -101,6 +98,7 @@ services:
       HERMES_GID: ${HERMES_GID:-1000}
     volumes:
       - ./data/hermes:/opt/data
+      - ./hermes-init:/opt/hermes-init:ro
       - ${WORKSPACE_DIR:-./workspace}:/workspace
     shm_size: "1g"
     mem_limit: 4g

@@ -10,16 +10,9 @@ BASE_IMAGE_NAME="nousresearch/hermes-agent:latest"
 # Load environment variables
 [[ -f .env ]] && set -a && source .env && set +a
 
-# Determine Hermes image based on CUSTOM_HERMES env var
-# CUSTOM_HERMES=false (default) -> use standard nousresearch/hermes-agent
-# CUSTOM_HERMES=true -> build custom hermes-stack-hermes
-if [[ "${CUSTOM_HERMES:-false}" == "true" ]]; then
-    HERMES_IMAGE="${HERMES_IMAGE:-hermes-stack-hermes}"
-    export HERMES_IMAGE
-else
-    HERMES_IMAGE="${HERMES_IMAGE:-nousresearch/hermes-agent:latest}"
-    export HERMES_IMAGE
-fi
+# Determine Hermes image
+HERMES_IMAGE="${HERMES_IMAGE:-nousresearch/hermes-agent:latest}"
+export HERMES_IMAGE
 
 print_help() {
 cat <<'EOF'
@@ -58,50 +51,6 @@ get_remote_digest() {
     docker manifest inspect "$BASE_IMAGE_NAME" 2>/dev/null \
         | grep -m1 '"digest"' \
         | awk -F'"' '{print $4}'
-}
-
-resolve_base_image() {
-    local digest
-    digest=$(get_remote_digest)
-
-    if [[ -z "$digest" ]]; then
-        echo "❌ Failed to resolve remote digest"
-        exit 1
-    fi
-
-    echo "${BASE_IMAGE_NAME%@*}@${digest}"
-}
-
-needs_rebuild() {
-    local remote_digest local_digest
-
-    remote_digest=$(get_remote_digest)
-
-    local_digest=$(docker image inspect hermes-stack-hermes \
-        --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
-        2>/dev/null || echo "")
-
-    [[ "$remote_digest" != "$local_digest" ]]
-}
-
-# -------------------------------------------------
-# Build
-# -------------------------------------------------
-build_image() {
-    local base_image base_digest
-
-    base_image=$(resolve_base_image)
-    base_digest="${base_image##*@}"
-
-    echo "🔨 Building with base image:"
-    echo "   $base_image"
-
-    docker compose --progress=plain build \
-        --no-cache \
-        --pull \
-        --build-arg BASE_IMAGE="$base_image" \
-        --build-arg BASE_DIGEST="$base_digest" \
-        --build-arg BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 
 # -------------------------------------------------
@@ -171,15 +120,7 @@ up)
         [[ "$arg" == "--upgrade" ]] && UPGRADE=1
     done
 
-    if [[ "${CUSTOM_HERMES:-false}" == "true" ]]; then
-        if [[ $UPGRADE -eq 1 ]]; then
-            echo "⬆️ Upgrading custom Hermes - pulling and rebuilding"
-            docker compose pull --ignore-buildable hermes
-            build_image
-        else
-            echo "✅ Custom Hermes build ready – use --upgrade to rebuild"
-        fi
-    elif [[ $UPGRADE -eq 1 ]]; then
+    if [[ $UPGRADE -eq 1 ]]; then
         docker compose pull
     fi
 
@@ -195,15 +136,7 @@ restart)
 
     docker compose down
 
-    if [[ "${CUSTOM_HERMES:-false}" == "true" ]]; then
-        if [[ $UPGRADE -eq 1 ]]; then
-            echo "⬆️ Upgrading custom Hermes - pulling and rebuilding"
-            docker compose pull --ignore-buildable hermes
-            build_image
-        else
-            echo "✅ Custom Hermes build ready – use --upgrade to rebuild"
-        fi
-    elif [[ $UPGRADE -eq 1 ]]; then
+    if [[ $UPGRADE -eq 1 ]]; then
         docker compose pull
     fi
 
