@@ -256,20 +256,20 @@ reset)
 
     echo "⚠️  Resetting data directories..."
 
-    # Backup .env files to .env.backup in same directory
-    [[ -f .env ]] && cp .env .env.backup && echo "  💾 Backed up .env → .env.backup"
+    # Backup and remove .env files to .env.backup in same directory
+    [[ -f .env ]] && mv .env .env.backup && echo "  💾 Backed up .env → .env.backup"
 
     for svc in $SERVICES; do
         case "$svc" in
             hermes)
-                [[ -f data/hermes/.env ]] && cp data/hermes/.env data/hermes/.env.backup && echo "  💾 Backed up data/hermes/.env → data/hermes/.env.backup"
+                [[ -f data/hermes/.env ]] && mv data/hermes/.env data/hermes/.env.backup && echo "  💾 Backed up data/hermes/.env → data/hermes/.env.backup"
                 rm -rf data/hermes/*
                 mkdir -p data/hermes
                 git checkout data/hermes/.gitkeep 2>/dev/null || true
                 echo "  ✅ Reset data/hermes"
                 ;;
             open-webui)
-                [[ -f data/open-webui/.env ]] && cp data/open-webui/.env data/open-webui/.env.backup && echo "  💾 Backed up data/open-webui/.env → data/open-webui/.env.backup"
+                [[ -f data/open-webui/.env ]] && mv data/open-webui/.env data/open-webui/.env.backup && echo "  💾 Backed up data/open-webui/.env → data/open-webui/.env.backup"
                 rm -rf data/open-webui/*
                 mkdir -p data/open-webui
                 git checkout data/open-webui/.gitkeep data/open-webui/.env.example 2>/dev/null || true
@@ -282,7 +282,7 @@ reset)
                 echo "  ✅ Reset data/camofox-browser"
                 ;;
             life360-mcp)
-                [[ -f data/life360-mcp/.env ]] && cp data/life360-mcp/.env data/life360-mcp/.env.backup && echo "  💾 Backed up data/life360-mcp/.env → data/life360-mcp/.env.backup"
+                [[ -f data/life360-mcp/.env ]] && mv data/life360-mcp/.env data/life360-mcp/.env.backup && echo "  💾 Backed up data/life360-mcp/.env → data/life360-mcp/.env.backup"
                 rm -rf data/life360-mcp/*
                 mkdir -p data/life360-mcp
                 git checkout data/life360-mcp/.gitkeep data/life360-mcp/.env.example 2>/dev/null || true
@@ -290,9 +290,6 @@ reset)
                 ;;
         esac
     done
-
-    rm -f .env
-    echo "  ✅ Removed .env"
 
     echo ""
     echo "✅ Reset complete. Run './hermes-stack setup' to reconfigure."
