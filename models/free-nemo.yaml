@@ -2,7 +2,7 @@ name: free-nemo
 description: Free tier NVIDIA Nemotron model via OpenRouter
 model:
   provider: openrouter
-  model: "nvidia/nemotron-3-nano-30b-a3b:free"
+  default: cheap_model
 embedding:
   provider: openrouter
   model: "nvidia/llama-nemotron-embed-vl-1b-v2"

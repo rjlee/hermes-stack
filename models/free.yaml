@@ -1,8 +1,8 @@
 name: free
-description: Free tier models via OpenRouter
+description: Free tier model via OpenRouter (elephant-alpha)
 model:
   provider: openrouter
-  model: "openrouter/elephant-alpha"
+  default: cheap_model
 embedding:
   provider: openrouter
   model: "nvidia/llama-nemotron-embed-vl-1b-v2"
