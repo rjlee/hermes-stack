@@ -171,69 +171,43 @@ setup_google_workspace()
 # -------------------------------------------------
 setup_life360()
 {
-    echo "📍 Life360 MCP Configuration"
+    echo "📍 Life360 CLI Configuration"
     echo ""
-    echo "=== Option 1: Authorization Token (Recommended) ==="
-    echo "1. Get the Life360 app:"
+    echo "=== Step 1: Get Authorization Token ==="
+    echo "The Life360 CLI needs an authorization token from the Life360 app."
+    echo ""
+    echo "To get your token:"
+    echo "1. Download the Life360 app:"
     echo "   - iOS: https://apps.apple.com/gb/app/life360/id335102840"
     echo "   - Android: https://play.google.com/store/apps/details?id=com.life360"
-    echo "2. Create a Life360 account (or sign in)"
-    echo "3. Create a 'Circle' (family group) if not already done"
+    echo "2. Sign in to your Life360 account"
+    echo "3. Create a 'Circle' (family group) if you haven't already"
     echo "4. In the app, go to: Account → Settings → Account Actions"
     echo "5. Look for 'Authorization Token' or 'Legacy Token'"
     echo "6. Copy this token (you may need to verify your identity first)"
     echo ""
-    echo "=== Option 2: Username + Password (OAuth) ==="
-    echo "1. Use your Life360 email and password"
-    echo "2. Note: OAuth may require periodic re-authentication"
+    echo "Note: The token is different from your login password."
+    echo "If you can't find it, try looking in the app's advanced settings."
     echo ""
-    echo "Choose authentication method:"
-    echo "  1) Skip (configure manually later)"
-    echo "  2) Authorization token (from Life360 app)"
-    echo "  3) Username + Password (OAuth)"
+    echo "=== Step 2: Enter Token ==="
     echo ""
-    read -p "Enter choice [1]: " CHOICE
-    CHOICE="${CHOICE:-1}"
-
+    read -p "Enter Life360 authorization token (or press Enter to skip): " LIFE360_TOKEN
     ENV_FILE="data/hermes/.env"
 
-    if [[ "$CHOICE" == "1" ]] || [[ "$CHOICE" == "skip" ]]; then
-        echo "Skipped. Edit $ENV_FILE manually when ready."
+    if [[ -z "$LIFE360_TOKEN" ]]; then
+        echo "No token entered. Skipped."
         return 0
     fi
 
-    echo ""
-
-    if [[ "$CHOICE" == "2" ]]; then
-        read -p "Authorization token: " LIFE360_AUTHORIZATION
-        if [[ -n "$LIFE360_AUTHORIZATION" ]]; then
-            # Add to hermes .env (create file if needed)
-            if [[ ! -f "$ENV_FILE" ]]; then
-                echo "# Hermes environment" > "$ENV_FILE"
-            fi
-            grep -q "^LIFE360_AUTHORIZATION=" "$ENV_FILE" && \
-                sed -i "s/^LIFE360_AUTHORIZATION=.*/LIFE360_AUTHORIZATION=$LIFE360_AUTHORIZATION/" "$ENV_FILE" || \
-                echo "LIFE360_AUTHORIZATION=$LIFE360_AUTHORIZATION" >> "$ENV_FILE"
-            grep -q "^LIFE360_TOKEN_TYPE=" "$ENV_FILE" || echo "LIFE360_TOKEN_TYPE=Bearer" >> "$ENV_FILE"
-            echo "  ✅ Saved authorization token to $ENV_FILE"
-        fi
-    elif [[ "$CHOICE" == "3" ]]; then
-        read -p "Username (email): " LIFE360_USERNAME
-        read -s -p "Password: " LIFE360_PASSWORD
-        echo ""
-        if [[ -n "$LIFE360_USERNAME" ]] && [[ -n "$LIFE360_PASSWORD" ]]; then
-            if [[ ! -f "$ENV_FILE" ]]; then
-                echo "# Hermes environment" > "$ENV_FILE"
-            fi
-            grep -q "^LIFE360_USERNAME=" "$ENV_FILE" || echo "LIFE360_USERNAME=$LIFE360_USERNAME" >> "$ENV_FILE"
-            grep -q "^LIFE360_PASSWORD=" "$ENV_FILE" || echo "LIFE360_PASSWORD=$LIFE360_PASSWORD" >> "$ENV_FILE"
-            grep -q "^LIFE360_CLIENT_ID=" "$ENV_FILE" || echo "LIFE360_CLIENT_ID=life360_mobile_app" >> "$ENV_FILE"
-            echo "  ✅ Saved username/password to $ENV_FILE"
-        fi
-    else
-        echo "Invalid choice: $CHOICE"
-        return 1
+    # Add to hermes .env (create file if needed)
+    if [[ ! -f "$ENV_FILE" ]]; then
+        echo "# Hermes environment" > "$ENV_FILE"
     fi
+    grep -q "^LIFE360_AUTHORIZATION=" "$ENV_FILE" && \
+        sed -i "s/^LIFE360_AUTHORIZATION=.*/LIFE360_AUTHORIZATION=$LIFE360_TOKEN/" "$ENV_FILE" || \
+        echo "LIFE360_AUTHORIZATION=$LIFE360_TOKEN" >> "$ENV_FILE"
+    grep -q "^LIFE360_TOKEN_TYPE=" "$ENV_FILE" || echo "LIFE360_TOKEN_TYPE=Bearer" >> "$ENV_FILE"
+    echo "  ✅ Saved authorization token"
 
     echo ""
     read -p "Restart hermes-stack now? [y/N]: " RESTART
