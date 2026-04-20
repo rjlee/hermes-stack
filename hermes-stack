@@ -135,11 +135,12 @@ setup_google_workspace()
         echo "Next steps:"
         echo "  1. Run: docker exec -e PYTHONPATH=/opt/hermes hermes-stack-hermes-1 python3 \\"
         echo "       /opt/data/skills/productivity/google-workspace/scripts/setup.py --auth-url"
-        echo "  2. Copy the URL shown, open in browser, authorize"
-        echo "  3. Copy the code shown, run:"
-        echo "     docker exec -e PYTHONPATH=/opt/hermes hermes-stack-hermes-1 python3 \\"
+        echo "  2. Copy the URL from output, open in browser, authorize"
+        echo "  3. In browser address bar, find 'code=XXXX' - copy just the code value"
+        echo "  4. Run: docker exec -e PYTHONPATH=/opt/hermes hermes-stack-hermes-1 python3 \\"
         echo "       /opt/data/skills/productivity/google-workspace/scripts/setup.py --auth-code CODE"
-        echo "  4. Restart hermes: docker compose restart hermes"
+        echo "     (replace CODE with the code from step 3)"
+        echo "  5. Restart hermes: docker compose restart hermes"
     else
         echo "  ❌ Invalid path"
         return 1
