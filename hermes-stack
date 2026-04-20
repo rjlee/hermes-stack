@@ -120,7 +120,11 @@ setup_google_workspace()
     if [[ -f "$CLIENT_SECRET" ]]; then
         mkdir -p data/hermes/.google
         cp "$CLIENT_SECRET" data/hermes/.google/client_secret.json
+        # Also copy to /opt/data for the google-workspace skill
+        cp "$CLIENT_SECRET" data/hermes/google_client_secret.json
         echo "  ✅ Saved client credentials to data/hermes/.google/"
+        # Fix permissions
+        chown -R 1000:1000 data/hermes/.google data/hermes/google_client_secret.json 2>/dev/null || true
         
         grep -q "^GOOGLE_SETUP_SERVICES=" "$ENV_FILE" || echo "GOOGLE_SETUP_SERVICES=$SERVICES" >> "$ENV_FILE"
         if [[ "$READONLY" == "y" ]] || [[ "$READONLY" == "Y" ]]; then
@@ -129,10 +133,13 @@ setup_google_workspace()
         echo "  ✅ Configuration saved"
         echo ""
         echo "Next steps:"
-        echo "  1. Run: docker exec hermes google-workspace-setup"
-        echo "     (or follow instructions in the skill)"
-        echo "  2. Complete OAuth flow in browser"
-        echo "  3. Restart hermes: docker compose restart hermes"
+        echo "  1. Run: docker exec -e PYTHONPATH=/opt/hermes hermes-stack-hermes-1 python3 \\"
+        echo "       /opt/data/skills/productivity/google-workspace/scripts/setup.py --auth-url"
+        echo "  2. Copy the URL shown, open in browser, authorize"
+        echo "  3. Copy the code shown, run:"
+        echo "     docker exec -e PYTHONPATH=/opt/hermes hermes-stack-hermes-1 python3 \\"
+        echo "       /opt/data/skills/productivity/google-workspace/scripts/setup.py --auth-code CODE"
+        echo "  4. Restart hermes: docker compose restart hermes"
     else
         echo "  ❌ Invalid path"
         return 1
