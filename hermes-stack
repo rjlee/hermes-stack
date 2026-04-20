@@ -452,6 +452,12 @@ setup)
                 cp -r skills/life360/. data/life360-mcp/skills/
                 echo "  ✅ Installed life360 skills"
             fi
+            # Copy hints for memory seeding
+            if [[ -f "skills/life360/hints" ]]; then
+                mkdir -p data/hermes/.hermes-stack/hints
+                cp skills/life360/hints data/hermes/.hermes-stack/hints/location-query
+                echo "  ✅ Installed life360 hints"
+            fi
             exit $RET
             ;;
         todoist)
@@ -465,10 +471,22 @@ setup)
             else
                 echo "  ⚠️ No skills/todoist/ directory found"
             fi
+            # Copy hints for memory seeding
+            if [[ -f "skills/todoist/hints" ]]; then
+                mkdir -p data/hermes/.hermes-stack/hints
+                cp skills/todoist/hints data/hermes/.hermes-stack/hints/task-query
+                echo "  ✅ Installed todoist hints"
+            fi
             exit 0
             ;;
         google-workspace)
             setup_google_workspace
+            # Copy hints for memory seeding
+            if [[ -f "skills/google-workspace/hints" ]]; then
+                mkdir -p data/hermes/.hermes-stack/hints
+                cp skills/google-workspace/hints data/hermes/.hermes-stack/hints/google-workspace
+                echo "  ✅ Installed google-workspace hints"
+            fi
             exit $?
             ;;
         help|-h)
