@@ -1,4 +1,5 @@
 # Ignore all .env files (contain secrets)
+# Note: .env now lives in data/.env (for docker-compose)
 **/.env
 # Also ignore backup files created by reset command
 **/.env.backup

@@ -73,3 +73,7 @@ EOF
 else
     echo "[bootstrap] OpenCode config already present – skipping"
 fi
+
+if [[ -d "${HOME}/.config/opencode" ]]; then
+    chown -R hermes:hermes "${HOME}/.config/opencode"
+fi

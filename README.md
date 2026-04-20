@@ -3,17 +3,16 @@
 ## Overview
 This repository contains a Docker‑Compose setup that runs:
 - **OpenWebUI** (a ChatUI front‑end) on port `8001`
-- **Hermes** (the OpenAI‑compatible API server) on port `8642`
+- **Hermes** (the OpenAI‑compatible API server) on port `8642` (internal only, accessed via OpenWebUI)
 - **CamoFox Browser** (headless browser for agent tasks) on port `9377` (internal only)
-- **Life360 MCP** (location tracking API) on port `8123` (internal only)
+- The **Life360 CLI** is installed at runtime via the bootstrap script.
 
 The stack uses the standard `nousresearch/hermes-agent` image. The **OpenCode CLI** is installed at runtime via the bootstrap script.
 
 All services store their persistent data under a single top‑level `data/` directory:
 - `data/open-webui` → OpenWebUI backend files
-- `data/hermes`   → Hermes `/opt/data`
+- `data/hermes`   → Hermes `/opt/data` (includes Life360 CLI credentials)
 - `data/camofox-browser` → CamoFox browser data
-- `data/life360-mcp` → Life360 MCP cache and state
 
 The `workspace/` directory is mounted for you to keep any local code or notebooks you want Hermes to see.
 
@@ -40,9 +39,10 @@ The `./hermes-stack setup` command creates the necessary `.env` files and genera
 
 | File | Variables | Description |
 |---|---|---|
-| `.env` | `API_SERVER_KEY`, `WORKSPACE_DIR` | Root config |
-| `data/hermes/.env` | `CAMOFOX_URL` | Hermes config |
+| `data/.env` | `API_SERVER_KEY`, `WORKSPACE_DIR` | Root config (shared secrets) |
+| `data/hermes/.env` | `CAMOFOX_URL`, `TODOIST_API_TOKEN`, `LIFE360_AUTHORIZATION` | Hermes config (includes TODOIST_API_TOKEN and LIFE360_AUTHORIZATION) |
 | `data/open-webui/.env` | `WEBUI_SECRET_KEY` | OpenWebUI config |
+| `data/camofox-browser/.env` | (optional) CamoFox settings | CamoFox webserver config |
 
 ## Available Commands
 
@@ -51,6 +51,13 @@ The `./hermes-stack setup` command creates the necessary `.env` files and genera
 | `./hermes-stack up` | Start the stack. Use --upgrade to pull latest images and rebuild Hermes. |
 | `./hermes-stack up --upgrade` | Pull latest images and rebuild Hermes |
 | `./hermes-stack restart` | Stop and start containers. Use --upgrade to pull latest and rebuild. |
+| `./hermes-stack reset` | Reset data directories (backups .env to .env.backup) |
+| `./hermes-stack setup` | Set up secrets and run hermes setup in container |
+| `./hermes-stack setup todoist` | Interactive Todoist setup + install todoist skills |
+| `./hermes-stack setup life360` | Interactive Life360 setup + install life360 skills |
+| `./hermes-stack profiles` | List available model profiles |
+| `./hermes-stack profiles <name>` | Apply a model profile (e.g., free, free-nemo) |
+| `./hermes-stack install skills` | Install skills from ./skills/ to data/hermes/ |
 | `./hermes-stack backup [--retain N] [--dry-run]` | Create a timestamped backup of `data/` and `workspace/`. Keeps the most recent 7 archives by default. |
 | `./hermes-stack restore` | Restore from a backup |
 | `./hermes-stack prune` | Remove unused Docker images and volumes |
@@ -58,7 +65,6 @@ The `./hermes-stack setup` command creates the necessary `.env` files and genera
 | `./hermes-stack check-env` | Validate required environment variables |
 | `./hermes-stack upgrade-base` | Pull latest Hermes‑Agent and show new digest |
 | `./hermes-stack cli` | Spawn an interactive hermes container (CLI mode) |
-| `./hermes-stack setup` | Set up secrets and run hermes setup in container |
 | `./hermes-stack help` | Show this help |
 
 ## Advanced Build Options
@@ -105,31 +111,19 @@ The `opencode.json` configuration only needs to specify the model (already set t
 ## Common Issues & Fixes
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `hermes` container restarts repeatedly | Missing `API_SERVER_KEY` or malformed `.env` | Ensure `.env` contains a valid `API_SERVER_KEY` and run `./hermes-stack up` |
+| `hermes` container restarts repeatedly | Missing `API_SERVER_KEY` or malformed `data/.env` | Ensure `data/.env` contains a valid `API_SERVER_KEY` and run `./hermes-stack up` |
 | OpenWebUI cannot reach Hermes (`/v1` errors) | Network issue – services not on the same bridge | Both services are attached to `hermesnet`; ensure you didn't modify the network name |
 | Data not persisting after `docker compose down` | Used `docker compose down -v` which removes volumes | Omit `-v` flag; the `data/` directories are bind‑mounted, they stay on the host |
 | Need to add a new init step for Hermes | New script required at container startup | Drop a `*.sh` file into `hermes-init/scripts/` and restart (`./hermes-stack restart`) |
+| Need to add Todoist skills | Install skills for Todoist CLI | Run `./hermes-stack setup todoist` |
+| Need to add Life360 skills | Install skills for Life360 CLI | Run `./hermes-stack setup life360` |
 
 ## Extending the Stack
 
 - **Add GPU support**: create a `docker-compose.gpu.yml` with a devices reservation block and start with `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d`.
 
-- **MCP Servers**: Add MCP (Model Context Protocol) servers to extend Hermes with additional tools. Configure in `data/hermes/config.yaml`:
-
-```yaml
-mcp_servers:
-  life360:
-    url: http://life360-mcp:8123
-  # Add more MCP servers as needed:
-  # filesystem:
-  #   command: npx
-  #   args: ["-y", "@modelcontextprotocol/server-filesystem", "/path"]
-  # github:
-  #   command: npx
-  #   args: ["-y", "@modelcontextprotocol/server-github"]
-  #   env:
-  #     GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_..."
-```
+- **Skills**: Add skills to the `skills/` directory. Each subdirectory represents an addon:  - `skills/todoist/` → Todoist CLI skills
+  - `skills/life360/` → Life360 CLI skills
 
 - **Pin OpenCode version**: edit `hermes-init/scripts/install-opencode.sh` to use a fixed release URL instead of the "latest" endpoint.
 

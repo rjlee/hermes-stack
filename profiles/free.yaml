@@ -1,0 +1,14 @@
+name: free
+description: Free tier models via OpenRouter
+model:
+  provider: openrouter
+  model: "openrouter/elephant-alpha"
+embedding:
+  provider: openrouter
+  model: "nvidia/llama-nemotron-embed-vl-1b-v2"
+tts:
+  provider: edge
+stt:
+  provider: faster-whisper
+  local:
+    model: base

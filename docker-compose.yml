@@ -13,11 +13,11 @@ services:
       - CAMOFOX_VNC_TIMEOUT_MS=300000
     # Add a healthcheck so other services can wait for the browser to be ready
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9377/health"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9377/health')"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 10s
+      retries: 6
+      start_period: 60s
     # Restart the container automatically if it crashes
     restart: unless-stopped
     # camofox-browser waits for hermes to be healthy before starting
@@ -29,30 +29,13 @@ services:
     networks:
       - hermesnet
 
-  life360-mcp:
-    image: ghcr.io/rjlee/life360-mcp:latest
-    env_file:
-      - ./data/life360-mcp/.env
-    environment:
-      - LIFE360_HTTP_HOST=0.0.0.0
-    # No host ports - internal only, hermes connects via HTTP on port 8123
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "-X", "POST", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"healthcheck\",\"version\":\"1.0\"}},\"id\":1}", "http://localhost:8123/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    networks:
-      - hermesnet
-
   open-webui:
     image: ghcr.io/open-webui/open-webui:latest
-    container_name: open-webui
+    user: "0:0"
     ports:
       - "8001:8080"
     env_file:
-      - .env
+      - ./data/.env
       - ./data/open-webui/.env
     environment:
       OPENAI_API_BASE_URL: "http://hermes:8642/v1"
@@ -74,16 +57,25 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 10s
+      retries: 6
+      start_period: 60s
     networks:
       - hermesnet
 
   hermes:
     image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
-    container_name: hermes
     user: "0:0"
     entrypoint: ["sh", "-c", "bash /opt/hermes-init/bootstrap.sh && exec /opt/hermes/docker/entrypoint.sh gateway run"]
+    env_file:
+      - ./data/.env
+      - ./data/hermes/.env
+    environment:
+      API_SERVER_ENABLED: "true"
+      API_SERVER_HOST: "0.0.0.0"
+      CAMOFOX_URL: "http://camofox-browser:9377"
+      OPENCODE_PROJECT_DIR: ${WORKSPACE_DIR:-./workspace}
+      HERMES_UID: "1000"
+      HERMES_GID: "1000"
     volumes:
       - ./data/hermes:/opt/data
       - ./hermes-init:/opt/hermes-init:ro
@@ -92,9 +84,6 @@ services:
     mem_limit: 4g
     mem_reservation: 2g
     restart: unless-stopped
-    depends_on:
-      life360-mcp:
-        condition: service_healthy
     healthcheck:
       test: [
         "CMD",
@@ -104,8 +93,8 @@ services:
       ]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 10s
+      retries: 6
+      start_period: 120s
     logging:
       driver: json-file
       options:
