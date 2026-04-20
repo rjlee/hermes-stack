@@ -4,6 +4,8 @@ model:
   provider: openrouter
   default: "openrouter/elephant-alpha"
   cheap_model: "openrouter/elephant-alpha"
+smart_model_routing:
+  enabled: true
 embedding:
   provider: openrouter
   model: "nvidia/llama-nemotron-embed-vl-1b-v2"
