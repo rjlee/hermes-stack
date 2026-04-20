@@ -27,7 +27,7 @@ Commands:
   logs             Follow live logs of all services.
   restart          Stop and start containers. Use --upgrade to pull latest and rebuild.
   fix-perms       Fix file ownership after container modifies data directories
-  profiles         List or apply model configurations (e.g., profiles free)
+  model            Switch LLM model config (e.g., model free)
   backup [--retain N] [--dry-run]
                    Create a timestamped backup of data/ and workspace/.
                    The script automatically keeps only the most recent N
@@ -300,14 +300,14 @@ fix-perms)
     ;;
 
 # -------------------------------------------------
-# Profiles - manage model configurations
+# Model - manage model configurations
 # -------------------------------------------------
-profiles)
+model)
     PROFILE_ACTION="${2:-list}"
     
-    if [[ "$PROFILE_ACTION" == "list" ]] || [[ -z "$PROFILE_ACTION" ]]; then
-        echo "Available profiles:"
-        for f in profiles/*.yaml; do
+if [[ "$PROFILE_ACTION" == "list" ]] || [[ -z "$PROFILE_ACTION" ]]; then
+        echo "Available models:"
+        for f in models/*.yaml; do
             if [[ -f "$f" ]]; then
                 NAME=$(basename "$f" .yaml)
                 DESC=$(grep "^description:" "$f" 2>/dev/null | sed 's/description: //')
@@ -315,29 +315,29 @@ profiles)
             fi
         done
         echo ""
-        echo "Usage: $0 profiles <name>  # Apply a profile"
+        echo "Usage: $0 model <name>  # Apply a model"
         exit 0
     fi
     
-    PROFILE_FILE="profiles/${PROFILE_ACTION}.yaml"
+    MODEL_FILE="models/${PROFILE_ACTION}.yaml"
     
-    if [[ ! -f "$PROFILE_FILE" ]]; then
-        echo "Profile not found: $PROFILE_ACTION"
-        echo "Run '$0 profiles list' for available profiles."
+    if [[ ! -f "$MODEL_FILE" ]]; then
+        echo "Model not found: $PROFILE_ACTION"
+        echo "Run '$0 model list' for available models."
         exit 1
     fi
     
-    echo "Applying profile: $PROFILE_ACTION"
+    echo "Applying model: $PROFILE_ACTION"
     
-    mkdir -p data/hermes/.hermes-stack/profiles
-    cp -f "$PROFILE_FILE" "data/hermes/.hermes-stack/profiles/"
+    mkdir -p data/hermes/.hermes-stack/models
+    cp -f "$MODEL_FILE" "data/hermes/.hermes-stack/models/"
     
     docker compose exec hermes python3 -c "
 import yaml
 import sys
 
 config_file = '/opt/data/config.yaml'
-profile_file = '/opt/data/.hermes-stack/profiles/${PROFILE_ACTION}.yaml'
+model_file = '/opt/data/.hermes-stack/models/${PROFILE_ACTION}.yaml'
 
 try:
     with open(config_file) as f:
@@ -347,22 +347,22 @@ except Exception as e:
     sys.exit(1)
 
 try:
-    with open(profile_file) as f:
-        profile = yaml.safe_load(f)
+    with open(model_file) as f:
+        m = yaml.safe_load(f)
 except Exception as e:
-    print(f'Error loading profile: {e}', file=sys.stderr)
+    print(f'Error loading model: {e}', file=sys.stderr)
     sys.exit(1)
 
 for key in ['model', 'embedding', 'tts', 'stt']:
-    if key in profile:
-        config[key] = profile[key]
-        value = profile[key]
-        if isinstance(value, dict):
-            for k, v in value.items():
+    if key in m:
+        config[key] = m[key]
+        val = m[key]
+        if isinstance(val, dict):
+            for k, v in val.items():
                 config.setdefault(key, {})[k] = v
         else:
-            config[key] = value
-        print(f'  Set {key}: {value.get(\"model\", value) if isinstance(value, dict) else value}')
+            config[key] = val
+        print(f'  Set {key}: {val}')
 
 try:
     with open(config_file, 'w') as f:
@@ -371,7 +371,7 @@ except Exception as e:
     print(f'Error saving config: {e}', file=sys.stderr)
     sys.exit(1)
 
-print('Profile applied!')
+print('Model applied!')
 "
     
     echo "Run './hermes-stack restart' to apply changes."
