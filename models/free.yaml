@@ -6,6 +6,9 @@ model:
   cheap_model: "openrouter/elephant-alpha"
 smart_model_routing:
   enabled: true
+fallback_providers:
+  - provider: openrouter
+    default: nvidia/nemotron-3-nano-30b-a3b:free
 embedding:
   provider: openrouter
   model: "nvidia/llama-nemotron-embed-vl-1b-v2"
