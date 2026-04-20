@@ -55,6 +55,7 @@ The `./hermes-stack setup` command creates the necessary `.env` files and genera
 | `./hermes-stack setup` | Set up secrets and run hermes setup in container |
 | `./hermes-stack setup todoist` | Interactive Todoist setup + install todoist skills |
 | `./hermes-stack setup life360` | Interactive Life360 setup + install life360 skills |
+| `./hermes-stack setup google-workspace` | Configure Google Workspace OAuth (Gmail, Calendar, Drive) |
 | `./hermes-stack profiles` | List available model profiles |
 | `./hermes-stack profiles <name>` | Apply a model profile (e.g., free, free-nemo) |
 | `./hermes-stack install skills` | Install skills from ./skills/ to data/hermes/ |
@@ -117,6 +118,7 @@ The `opencode.json` configuration only needs to specify the model (already set t
 | Need to add a new init step for Hermes | New script required at container startup | Drop a `*.sh` file into `hermes-init/scripts/` and restart (`./hermes-stack restart`) |
 | Need to add Todoist skills | Install skills for Todoist CLI | Run `./hermes-stack setup todoist` |
 | Need to add Life360 skills | Install skills for Life360 CLI | Run `./hermes-stack setup life360` |
+| Need Google Workspace (Gmail, Calendar, Drive) | Configure OAuth in Google Cloud Console | Run `./hermes-stack setup google-workspace` and follow prompts |
 
 ## Extending the Stack
 

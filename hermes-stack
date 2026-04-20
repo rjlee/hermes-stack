@@ -42,6 +42,7 @@ Commands:
   setup [subcommand]  Set up secrets in .env and run hermes setup
                   todoist - Configure Todoist API and install todoist skills
                   life360 - Configure Life360 MCP and install location skills
+                  google-workspace - Configure Google Workspace OAuth
   reset [services] Reset data directories (default: all services)
   help             Show this help message.
 EOF
@@ -54,6 +55,90 @@ get_remote_digest() {
     docker manifest inspect "$BASE_IMAGE_NAME" 2>/dev/null \
         | grep -m1 '"digest"' \
         | awk -F'"' '{print $4}'
+}
+
+# -------------------------------------------------
+# Google Workspace Setup
+# -------------------------------------------------
+setup_google_workspace()
+{
+    echo "📧 Google Workspace Configuration"
+    echo ""
+    echo "This command helps you set up Google Workspace (Gmail, Calendar, Drive, etc.)"
+    echo "OAuth2 is required - you'll need to create credentials in Google Cloud Console."
+    echo ""
+    echo "Available services:"
+    echo "  - gmail     : Read/send emails"
+    echo "  - calendar : Calendar events"
+    echo "  - drive   : Drive files"
+    echo "  - contacts: Google contacts"
+    echo "  - docs    : Google Docs"
+    echo "  - sheets  : Google Sheets"
+    echo ""
+    echo "Read-only scopes are available for gmail and drive."
+    echo ""
+    echo "For full setup instructions, visit:"
+    echo "  https://developers.google.com/workspace/guides/create-credentials"
+    echo ""
+    echo "Quick steps:"
+    echo "  1. Go to Google Cloud Console"
+    echo "  2. Create OAuth 2.0 client ID credentials"
+    echo "  3. Download the JSON file"
+    echo ""
+    read -p "Path to client_secret.json (or press Enter to skip): " CLIENT_SECRET
+    if [[ -z "$CLIENT_SECRET" ]]; then
+        echo "Skipped. Run this command again with the path when ready."
+        return 0
+    fi
+    
+    if [[ ! -f "$CLIENT_SECRET" ]]; then
+        echo "  ❌ File not found: $CLIENT_SECRET"
+        return 1
+    fi
+    
+    echo ""
+    echo "Which services do you need? (comma-separated, or 'all'):"
+    read -p "[all]: " SERVICES
+    SERVICES="${SERVICES:-all}"
+    
+    echo ""
+    echo "Use read-only scopes? (recommended for safety):"
+    read -p "[y/N]: " READONLY
+    READONLY="${READONLY:-n}"
+    
+    ENV_FILE="data/hermes/.env"
+    if [[ ! -f "$ENV_FILE" ]]; then
+        echo "# Hermes environment" > "$ENV_FILE"
+    fi
+    
+    if [[ -f "$CLIENT_SECRET" ]]; then
+        mkdir -p data/hermes/.google
+        cp "$CLIENT_SECRET" data/hermes/.google/client_secret.json
+        echo "  ✅ Saved client credentials to data/hermes/.google/"
+        
+        grep -q "^GOOGLE_SETUP_SERVICES=" "$ENV_FILE" || echo "GOOGLE_SETUP_SERVICES=$SERVICES" >> "$ENV_FILE"
+        if [[ "$READONLY" == "y" ]] || [[ "$READONLY" == "Y" ]]; then
+            grep -q "^GOOGLE_READONLY=" "$ENV_FILE" || echo "GOOGLE_READONLY=true" >> "$ENV_FILE"
+        fi
+        echo "  ✅ Configuration saved"
+        echo ""
+        echo "Next steps:"
+        echo "  1. Run: docker exec hermes google-workspace-setup"
+        echo "     (or follow instructions in the skill)"
+        echo "  2. Complete OAuth flow in browser"
+        echo "  3. Restart hermes: docker compose restart hermes"
+    else
+        echo "  ❌ Invalid path"
+        return 1
+    fi
+    
+    echo ""
+    read -p "Restart hermes now? [y/N]: " RESTART
+    if [[ "$RESTART" == "y" ]] || [[ "$RESTART" == "Y" ]]; then
+        echo ""
+        echo "Restarting hermes..."
+        docker compose restart hermes
+    fi
 }
 
 # -------------------------------------------------
@@ -382,11 +467,16 @@ setup)
             fi
             exit 0
             ;;
+        google-workspace)
+            setup_google_workspace
+            exit $?
+            ;;
         help|-h)
             echo "Usage: $0 setup [container]"
-            echo "  setup         - Set up .env files, generate secrets, run hermes setup"
-            echo "  setup life360 - Interactive Life360 setup and install life360 skills"
-            echo "  setup todoist - Interactive Todoist setup and install todoist skills"
+            echo "  setup              - Set up .env files, generate secrets, run hermes setup"
+            echo "  setup todoist      - Configure Todoist API and install todoist skills"
+            echo "  setup life360     - Configure Life360 MCP and install location skills"
+            echo "  setup google-workspace - Configure Google Workspace OAuth"
             exit 0
             ;;
     esac
