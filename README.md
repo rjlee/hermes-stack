@@ -58,6 +58,7 @@ The `./hermes-stack setup` command creates the necessary `.env` files and genera
 | `./hermes-stack setup google-workspace` | Configure Google Workspace OAuth (Gmail, Calendar, Drive) |
 | `./hermes-stack profiles` | List available model profiles |
 | `./hermes-stack profiles <name>` | Apply a model profile (e.g., free, free-nemo) |
+| `./hermes-stack fix-perms` | Fix file ownership after container modifies data directories |
 | `./hermes-stack install skills` | Install skills from ./skills/ to data/hermes/ |
 | `./hermes-stack backup [--retain N] [--dry-run]` | Create a timestamped backup of `data/` and `workspace/`. Keeps the most recent 7 archives by default. |
 | `./hermes-stack restore` | Restore from a backup |
