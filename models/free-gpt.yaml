@@ -1,0 +1,20 @@
+name: free-gpt
+description: Free tier GPT-OSS model via OpenRouter
+model:
+  provider: openrouter
+  default: "openai/gpt-oss-120b:free"
+  cheap_model: "openai/gpt-oss-120b:free"
+smart_model_routing:
+  enabled: true
+fallback_providers:
+  - provider: openrouter
+    default: openrouter/elephant-alpha
+embedding:
+  provider: openrouter
+  model: "nvidia/llama-nemotron-embed-vl-1b-v2"
+tts:
+  provider: edge
+stt:
+  provider: faster-whisper
+  local:
+    model: base
