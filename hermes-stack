@@ -26,6 +26,7 @@ Commands:
   down             Stop and remove containers, networks and default volumes.
   logs             Follow live logs of all services.
   restart          Stop and start containers. Use --upgrade to pull latest and rebuild.
+  fix-perms       Fix file ownership after container modifies data directories
   profiles         List or apply model configurations (e.g., profiles free)
   backup [--retain N] [--dry-run]
                    Create a timestamped backup of data/ and workspace/.
@@ -285,6 +286,17 @@ restart)
     fi
 
     docker compose up -d
+    ;;
+
+# -------------------------------------------------
+# Fix permissions
+# -------------------------------------------------
+fix-perms)
+    echo "Fixing data/hermes ownership..."
+    find data/hermes -user 10000 -exec chown 1000:1000 {} \; 2>/dev/null || true
+    find data/hermes -type f -exec chmod go+r {} \; 2>/dev/null || true
+    find data/hermes -type d -exec chmod go+rx {} \; 2>/dev/null || true
+    echo "Done. Hermes still owns files, but host can read them."
     ;;
 
 # -------------------------------------------------
