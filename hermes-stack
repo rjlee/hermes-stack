@@ -52,7 +52,9 @@ Commands:
   install skills   Install skills (and hints) from ./skills/ to ./data/hermes/
   install hints    Install hints from ./hints/ to ./data/hermes/.hermes-stack/hints/
   cli             Spawn an interactive hermes container (CLI mode)
-  setup [subcommand]  Set up secrets in .env and run hermes setup
+   say <message>     Send a chat message to Hermes and print the response
+                   --output=json  Print full JSON response instead of plain text
+   setup [subcommand]  Set up secrets in .env and run hermes setup
                   todoist - Configure Todoist API and install todoist skills
                   life360 - Configure Life360 MCP and install location skills
                   google-workspace - Configure Google Workspace OAuth
@@ -985,6 +987,77 @@ upgrade-base)
     docker image inspect "$BASE_IMAGE_NAME" \
         --format='{{index .RepoDigests 0}}' \
         | cut -d'@' -f2
+    ;;
+
+# -------------------------------------------------
+# Say - send a chat message to Hermes
+# -------------------------------------------------
+say)
+    OUTPUT="text"
+    MESSAGE=""
+    for arg in "$@"; do
+        case "$arg" in
+            --output=json) OUTPUT="json" ;;
+            --output=*) echo "Unknown output format: ${arg#*=}"; exit 1 ;;
+            --*) echo "Unknown flag: $arg"; exit 1 ;;
+            *) MESSAGE="$arg" ;;
+        esac
+    done
+
+    if [[ -z "$MESSAGE" ]]; then
+        echo "Usage: $0 say <message> [--output=json]"
+        exit 1
+    fi
+
+    # shellcheck source=/dev/null
+    [[ -f "$ROOT_ENV_FILE" ]] && source "$ROOT_ENV_FILE"
+
+    if [[ -z "${API_SERVER_KEY:-}" ]]; then
+        echo "❌ API_SERVER_KEY not found in .env"
+        exit 1
+    fi
+
+    echo "💬 Sending: $MESSAGE"
+    echo ""
+
+    RESPONSE=$(docker exec hermes-stack-hermes-1 python3 -c "
+import json, urllib.request, sys
+msg = sys.argv[1]
+payload = json.dumps({
+    'model': 'hermes',
+    'messages': [{'role': 'user', 'content': msg}],
+    'stream': False
+}).encode()
+req = urllib.request.Request(
+    'http://localhost:8642/v1/chat/completions',
+    data=payload,
+    headers={
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $API_SERVER_KEY'
+    }
+)
+try:
+    resp = urllib.request.urlopen(req)
+    print(resp.read().decode())
+except Exception as e:
+    print(json.dumps({'error': str(e)}))
+" "$MESSAGE")
+
+    if [[ "$OUTPUT" == "json" ]]; then
+        echo "$RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$RESPONSE"
+    else
+        echo "$RESPONSE" | python3 -c "
+import json,sys
+try:
+    d = json.load(sys.stdin)
+    if 'error' in d:
+        print(f'Error: {d[\"error\"]}')
+    else:
+        print(d['choices'][0]['message']['content'])
+except Exception as e:
+    print(f'Parse error: {e}')
+" 2>/dev/null || echo "Failed to parse response"
+    fi
     ;;
 
 help|--help|-h|"")
