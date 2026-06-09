@@ -541,6 +541,12 @@ setup)
                 cp skills/life360/location-query/hints data/hermes/.hermes-stack/hints/location-query
                 echo "  ✅ Installed life360 hints"
             fi
+            # Copy install script for bootstrap
+            if [[ -f "skills/life360/location-query/install.sh" ]]; then
+                mkdir -p data/hermes/.hermes-stack/bootstrap
+                cp skills/life360/location-query/install.sh data/hermes/.hermes-stack/bootstrap/location-query.sh
+                echo "  ✅ Installed life360 install script"
+            fi
             exit $RET
             ;;
         todoist)
@@ -559,6 +565,12 @@ setup)
                 mkdir -p data/hermes/.hermes-stack/hints
                 cp skills/todoist/task-query/hints data/hermes/.hermes-stack/hints/task-query
                 echo "  ✅ Installed todoist hints"
+            fi
+            # Copy install script for bootstrap
+            if [[ -f "skills/todoist/task-query/install.sh" ]]; then
+                mkdir -p data/hermes/.hermes-stack/bootstrap
+                cp skills/todoist/task-query/install.sh data/hermes/.hermes-stack/bootstrap/task-query.sh
+                echo "  ✅ Installed todoist install script"
             fi
             exit 0
             ;;
@@ -699,6 +711,20 @@ print('  ✅ compression.context_length removed (inherits from main)')
         "
     fi
 
+    if [[ -d "${SCRIPT_DIR}/bootstrap" ]]; then
+        docker run --rm --entrypoint bash \
+            -v "${SCRIPT_DIR}/bootstrap:/opt/bootstrap:ro" \
+            -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
+            "$HERMES_IMAGE" \
+            -c "
+        mkdir -p /opt/data/.hermes-stack/bootstrap
+        for f in /opt/bootstrap/*.sh; do
+            cp \"\$f\" \"/opt/data/.hermes-stack/bootstrap/\"
+            echo \"  Installed bootstrap: \$(basename \"\$f\")\"
+        done
+        "
+    fi
+
     # Fix ownership after hermes setup
     chown -R "$(id -u):$(id -g)" "${SCRIPT_DIR}/data/hermes" 2>/dev/null || true
     ;;
@@ -771,8 +797,37 @@ install)
                         cp "$skill/hints" "data/hermes/.hermes-stack/hints/$skill_name"
                         echo "  ✅ Hint installed: $skill_name"
                     fi
+                    # Install per-skill bootstrap scripts
+                    if [[ -f "$skill/install.sh" ]]; then
+                        mkdir -p data/hermes/.hermes-stack/bootstrap
+                        cp "$skill/install.sh" "data/hermes/.hermes-stack/bootstrap/$skill_name.sh"
+                        echo "  ✅ Install script: $skill_name"
+                    fi
                 done
                 # Install group-level hints for groups without individual skills (e.g., google-workspace)
+                for group in skills/*/; do
+                    gname=$(basename "$group")
+                    if [[ -f "$group/hints" ]]; then
+                        for skill_dir in "$group"*/; do
+                            if [[ -f "$skill_dir/hints" ]]; then
+                                continue 2
+                            fi
+                        done
+                        mkdir -p data/hermes/.hermes-stack/hints
+                        cp "$group/hints" "data/hermes/.hermes-stack/hints/$gname"
+                        echo "  ✅ Hint installed: $gname"
+                    fi
+                done
+                # Install standalone bootstrap scripts (not tied to a specific skill)
+                if [[ -d "bootstrap" ]]; then
+                    mkdir -p data/hermes/.hermes-stack/bootstrap
+                    for f in bootstrap/*.sh; do
+                        if [[ -f "$f" ]]; then
+                            cp "$f" "data/hermes/.hermes-stack/bootstrap/"
+                            echo "  ✅ Install script: $(basename "$f")"
+                        fi
+                    done
+                fi
                 for group in skills/*/; do
                     gname=$(basename "$group")
                     if [[ -f "$group/hints" ]]; then
