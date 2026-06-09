@@ -53,6 +53,20 @@ HERMES_IMAGE=nousresearch/hermes-agent:v2026.4.8
 
 When you run `./hermes-stack up --upgrade`, the script pulls the latest images.
 
+### File ownership
+
+Each container runs under a different user ID:
+
+| Service | UID | GID |
+|---|---|---|
+| Hermes | 10000 | 10000 |
+| Open WebUI | root | root |
+| CamoFox | node user | node user |
+
+Files created inside a container are owned by that container's UID on the host. If those UIDs don't match your host user, you may not be able to edit files directly.
+
+Run `./hermes-stack fix-perms` to change `data/hermes/` ownership from UID 10000 to your host user. Note that this may prevent the container from writing to those files — run `fix-perms` only when you need to edit files on the host, then let the container recreate them on the next restart.
+
 ## Available Commands
 
 | Command | Description |
@@ -162,6 +176,7 @@ The `opencode.json` configuration lives at `data/hermes/opencode.json` and is mo
 | Need to add Todoist skills | Install skills for Todoist CLI | Run `./hermes-stack setup todoist` |
 | Need to add Life360 skills | Install skills for Life360 CLI | Run `./hermes-stack setup life360` |
 | Need Google Workspace (Gmail, Calendar, Drive) | Configure OAuth in Google Cloud Console | Run `./hermes-stack setup google-workspace` and follow prompts |
+| Cannot edit files in `data/hermes/` | Container (UID 10000) owns files, not your host user | Run `./hermes-stack fix-perms` to change ownership to your host user |
 | GPU support needed | No GPU devices in compose | Add a `docker-compose.gpu.yml` with NVIDIA device reservations |
 
 ---
