@@ -65,7 +65,7 @@ Each container runs under a different user ID:
 
 Files created inside a container are owned by that container's UID on the host. If those UIDs don't match your host user, you may not be able to edit files directly.
 
-Run `./hermes-stack fix-perms` to change `data/hermes/` ownership from UID 10000 to your host user. Note that this may prevent the container from writing to those files — run `fix-perms` only when you need to edit files on the host, then let the container recreate them on the next restart.
+To make files readable on the host without changing ownership, run `chmod -R o+rX data/hermes` as root. This lets the host read files while keeping container write access intact.
 
 ## Available Commands
 
@@ -81,7 +81,6 @@ Run `./hermes-stack fix-perms` to change `data/hermes/` ownership from UID 10000
 | `./hermes-stack setup life360` | Interactive Life360 setup + install location skills |
 | `./hermes-stack setup google-workspace` | Configure Google Workspace OAuth (Gmail, Calendar, Drive) |
 | `./hermes-stack model <name>` | Switch LLM model config (e.g., `model free`) |
-| `./hermes-stack fix-perms` | Make `data/hermes/` files readable on the host |
 | `./hermes-stack install skills` | Install skills, hints, and bootstrap scripts from `./skills/` and `./bootstrap/` |
 | `./hermes-stack install hints` | Install memory‑seeding hints from `./hints/` |
 | `./hermes-stack run <command>` | Run an arbitrary command in a fresh hermes container |
@@ -176,7 +175,7 @@ The `opencode.json` configuration lives at `data/hermes/opencode.json` and is mo
 | Need to add Todoist skills | Install skills for Todoist CLI | Run `./hermes-stack setup todoist` |
 | Need to add Life360 skills | Install skills for Life360 CLI | Run `./hermes-stack setup life360` |
 | Need Google Workspace (Gmail, Calendar, Drive) | Configure OAuth in Google Cloud Console | Run `./hermes-stack setup google-workspace` and follow prompts |
-| Cannot edit files in `data/hermes/` | Container (UID 10000) owns files, not your host user | Run `./hermes-stack fix-perms` to change ownership to your host user |
+| Cannot edit files in `data/hermes/` | Container (UID 10000) owns files, not your host user | Run `sudo chmod -R o+rX data/hermes` to make them readable without breaking container write access |
 | GPU support needed | No GPU devices in compose | Add a `docker-compose.gpu.yml` with NVIDIA device reservations |
 
 ---
