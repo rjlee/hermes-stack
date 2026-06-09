@@ -55,7 +55,7 @@ The `./hermes-stack setup` command creates the necessary `.env` files and genera
 | `./hermes-stack setup google-workspace` | Configure Google Workspace OAuth (Gmail, Calendar, Drive) |
 | `./hermes-stack model <name>` | Switch LLM model config (e.g., `model free`) |
 | `./hermes-stack fix-perms` | Make `data/hermes/` files readable on the host |
-| `./hermes-stack install skills` | Install skills from `./skills/` to `data/hermes/` |
+| `./hermes-stack install skills` | Install skills, hints, and bootstrap install scripts from `./skills/` and `./bootstrap/` to `data/hermes/` |
 | `./hermes-stack install hints` | Install memory‑seeding hints from `./hints/` |
 | `./hermes-stack run <command>` | Run an arbitrary command in a fresh hermes container |
 | `./hermes-stack cli` | Spawn an interactive hermes container (CLI mode) |
@@ -123,25 +123,35 @@ The `opencode.json` configuration lives at `data/hermes/opencode.json` and is mo
 
 - **Add GPU support**: create a `docker-compose.gpu.yml` with a devices reservation block and start with `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d`.
 
-- **Skills**: Add skills to the top‑level `skills/` directory. The expected layout is `skills/<group>/<skill-name>/`. Each skill directory can contain an optional `hints` file for memory seeding:
+- **Skills**: Add skills to the top‑level `skills/` directory. The expected layout is `skills/<group>/<skill-name>/`:
   ```
   skills/
   ├── life360/
   │   └── location-query/       # Hermes skill
-  │       └── hints              # memory‑seeding hints
+  │       ├── hints              # memory‑seeding hints
+  │       └── install.sh         # bootstrap script (runs at container startup)
   ├── todoist/
   │   └── task-query/            # Hermes skill
-  │       └── hints              # memory‑seeding hints
+  │       ├── hints              # memory‑seeding hints
+  │       └── install.sh         # bootstrap script (runs at container startup)
   ├── google-workspace/
   │   └── hints                  # group‑level hints (no individual skills)
   └── mcp/
       └── life360-location-awareness/  # MCP server config
   ```
+  Each skill can include:
+  - `hints` — memory‑seeding hints for the agent
+  - `install.sh` — a script copied to `data/hermes/.hermes-stack/bootstrap/` and run on container startup (for installing CLI tools, etc.)
+  
   Run `./hermes-stack install skills` to deploy them into `data/hermes/`.
 
 - **Hints**: Place general hints (not tied to a specific skill) directly in `hints/` at the repo root. Run `./hermes-stack install hints` to deploy them.
 
-- **Pin OpenCode version**: edit `data/hermes/.hermes-stack/bootstrap/install-opencode.sh` to use a fixed release URL instead of the "latest" endpoint.
+- **Bootstraps**: Place standalone bootstrap scripts (not tied to a specific skill) in `bootstrap/` at the repo root. They are copied to `data/hermes/.hermes-stack/bootstrap/` during `install skills` and run on every container startup. Example: `bootstrap/install-opencode.sh`.
+
+- **Per‑skill bootstraps**: If a skill needs a CLI tool installed, add an `install.sh` inside the skill directory. It gets copied to the bootstrap directory automatically during `install skills`. See the `install.sh` examples under `skills/life360/` and `skills/todoist/`.
+
+- **Pin OpenCode version**: edit `bootstrap/install-opencode.sh` (tracked in git) to use a fixed release URL instead of the "latest" endpoint.
 
 ## Cleanup
 ```bash
