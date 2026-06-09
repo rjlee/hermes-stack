@@ -1,6 +1,7 @@
 # Hermes + OpenWebUI Stack
 
 ## Overview
+
 This repository contains a Docker‑Compose setup that runs:
 - **OpenWebUI** (a ChatUI front‑end) on port `8001`
 - **Hermes** (the agent framework) on its internal port `8642`, accessed via OpenWebUI
@@ -29,7 +30,9 @@ The `workspace/` directory is mounted for you to keep any local code or notebook
 ./hermes-stack status
 ```
 
-## Environment variables
+## Configuration
+
+### Environment files
 
 The `./hermes-stack setup` command creates the necessary `.env` files and generates secrets automatically:
 
@@ -39,6 +42,16 @@ The `./hermes-stack setup` command creates the necessary `.env` files and genera
 | `data/hermes/.env` | `TODOIST_API_TOKEN`, `LIFE360_AUTHORIZATION` | Hermes config (set via `setup todoist` / `setup life360`) |
 | `data/open-webui/.env` | `WEBUI_SECRET_KEY` | OpenWebUI config |
 | `data/camofox-browser/.env` | `CAMOFOX_PORT`, `CAMOFOX_HEADLESS`, etc. | CamoFox webserver config |
+
+### Image overrides
+
+By default, the stack uses `nousresearch/hermes-agent:latest`. Override it by setting `HERMES_IMAGE` in `.env`:
+
+```bash
+HERMES_IMAGE=nousresearch/hermes-agent:v2026.4.8
+```
+
+When you run `./hermes-stack up --upgrade`, the script pulls the latest images.
 
 ## Available Commands
 
@@ -55,7 +68,7 @@ The `./hermes-stack setup` command creates the necessary `.env` files and genera
 | `./hermes-stack setup google-workspace` | Configure Google Workspace OAuth (Gmail, Calendar, Drive) |
 | `./hermes-stack model <name>` | Switch LLM model config (e.g., `model free`) |
 | `./hermes-stack fix-perms` | Make `data/hermes/` files readable on the host |
-| `./hermes-stack install skills` | Install skills, hints, and bootstrap install scripts from `./skills/` and `./bootstrap/` to `data/hermes/` |
+| `./hermes-stack install skills` | Install skills, hints, and bootstrap scripts from `./skills/` and `./bootstrap/` |
 | `./hermes-stack install hints` | Install memory‑seeding hints from `./hints/` |
 | `./hermes-stack run <command>` | Run an arbitrary command in a fresh hermes container |
 | `./hermes-stack cli` | Spawn an interactive hermes container (CLI mode) |
@@ -66,16 +79,6 @@ The `./hermes-stack setup` command creates the necessary `.env` files and genera
 | `./hermes-stack upgrade-base` | Pull latest Hermes‑Agent and show new digest |
 | `./hermes-stack reset [services]` | Reset data directories for one or more services (default: all). Backs up `.env` to `.env.backup` |
 | `./hermes-stack help` | Show this help |
-
-## Advanced Build Options
-
-By default, the stack uses the standard `nousresearch/hermes-agent:latest` image. You can override it by setting `HERMES_IMAGE` in your `.env`:
-
-```bash
-HERMES_IMAGE=nousresearch/hermes-agent:v2026.4.8
-```
-
-When you upgrade with `--upgrade`, the script pulls the latest Docker images.
 
 ## Backup
 
@@ -97,6 +100,46 @@ Examples:
 ./hermes-stack backup --dry-run
 ```
 
+## Skills, Hints & Bootstraps
+
+### Skills
+
+Add skills to the top‑level `skills/` directory. The expected layout is `skills/<group>/<skill-name>/`:
+
+```
+skills/
+├── life360/
+│   └── location-query/       # Hermes skill
+│       ├── hints              # memory‑seeding hints
+│       └── install.sh         # bootstrap script (runs at container startup)
+├── todoist/
+│   └── task-query/            # Hermes skill
+│       ├── hints              # memory‑seeding hints
+│       └── install.sh         # bootstrap script (runs at container startup)
+├── google-workspace/
+│   └── hints                  # group‑level hints (no individual skills)
+└── mcp/
+    └── life360-location-awareness/  # MCP server config
+```
+
+Each skill can include:
+- `hints` — memory‑seeding hints for the agent
+- `install.sh` — a script copied to `data/hermes/.hermes-stack/bootstrap/` and run on container startup (for installing CLI tools, etc.)
+
+Run `./hermes-stack install skills` to deploy them into `data/hermes/`.
+
+### Hints
+
+Place general hints (not tied to a specific skill) directly in `hints/` at the repo root. Run `./hermes-stack install hints` to deploy them.
+
+### Bootstraps
+
+Place standalone bootstrap scripts (not tied to a specific skill) in `bootstrap/` at the repo root. They are copied to `data/hermes/.hermes-stack/bootstrap/` during `install skills` and run on every container startup. Example: `bootstrap/install-opencode.sh`.
+
+If a skill needs a CLI tool installed, add an `install.sh` inside the skill directory instead — it gets picked up automatically. See the examples under `skills/life360/` and `skills/todoist/`.
+
+To pin a specific version (e.g. OpenCode), edit the corresponding script in `bootstrap/` (tracked in git) and change the release URL.
+
 ## OpenCode CLI
 
 The OpenCode CLI is installed at runtime via the bootstrap hook and configured to use a **local LLM provider** — no API key required. Verify it works inside the container:
@@ -109,55 +152,17 @@ docker exec hermes-stack-hermes-1 opencode --version
 The `opencode.json` configuration lives at `data/hermes/opencode.json` and is mounted into the container at `/opt/data/opencode.json`. Edit it to change providers or models.
 
 ## Common Issues & Fixes
+
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `hermes` container restarts repeatedly | Missing `API_SERVER_KEY` or malformed `data/.env` | Ensure `data/.env` contains a valid `API_SERVER_KEY` and run `./hermes-stack up` |
 | OpenWebUI cannot reach Hermes (`/v1` errors) | Network issue – services not on the same bridge | Both services are attached to `hermesnet`; ensure you didn't modify the network name |
 | Data not persisting after `docker compose down` | Used `docker compose down -v` which removes volumes | Omit `-v` flag; the `data/` directories are bind‑mounted, they stay on the host |
-| Need to add a new init step for Hermes | New script required at container startup | Drop a `*.sh` file into `data/hermes/.hermes-stack/bootstrap/` and restart |
+| Need to add a new init step for Hermes | New script required at container startup | Add an `install.sh` inside the skill directory, or drop a `*.sh` into `bootstrap/` |
 | Need to add Todoist skills | Install skills for Todoist CLI | Run `./hermes-stack setup todoist` |
 | Need to add Life360 skills | Install skills for Life360 CLI | Run `./hermes-stack setup life360` |
 | Need Google Workspace (Gmail, Calendar, Drive) | Configure OAuth in Google Cloud Console | Run `./hermes-stack setup google-workspace` and follow prompts |
-
-## Extending the Stack
-
-- **Add GPU support**: create a `docker-compose.gpu.yml` with a devices reservation block and start with `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d`.
-
-- **Skills**: Add skills to the top‑level `skills/` directory. The expected layout is `skills/<group>/<skill-name>/`:
-  ```
-  skills/
-  ├── life360/
-  │   └── location-query/       # Hermes skill
-  │       ├── hints              # memory‑seeding hints
-  │       └── install.sh         # bootstrap script (runs at container startup)
-  ├── todoist/
-  │   └── task-query/            # Hermes skill
-  │       ├── hints              # memory‑seeding hints
-  │       └── install.sh         # bootstrap script (runs at container startup)
-  ├── google-workspace/
-  │   └── hints                  # group‑level hints (no individual skills)
-  └── mcp/
-      └── life360-location-awareness/  # MCP server config
-  ```
-  Each skill can include:
-  - `hints` — memory‑seeding hints for the agent
-  - `install.sh` — a script copied to `data/hermes/.hermes-stack/bootstrap/` and run on container startup (for installing CLI tools, etc.)
-  
-  Run `./hermes-stack install skills` to deploy them into `data/hermes/`.
-
-- **Hints**: Place general hints (not tied to a specific skill) directly in `hints/` at the repo root. Run `./hermes-stack install hints` to deploy them.
-
-- **Bootstraps**: Place standalone bootstrap scripts (not tied to a specific skill) in `bootstrap/` at the repo root. They are copied to `data/hermes/.hermes-stack/bootstrap/` during `install skills` and run on every container startup. Example: `bootstrap/install-opencode.sh`.
-
-- **Per‑skill bootstraps**: If a skill needs a CLI tool installed, add an `install.sh` inside the skill directory. It gets copied to the bootstrap directory automatically during `install skills`. See the `install.sh` examples under `skills/life360/` and `skills/todoist/`.
-
-- **Pin OpenCode version**: edit `bootstrap/install-opencode.sh` (tracked in git) to use a fixed release URL instead of the "latest" endpoint.
-
-## Cleanup
-```bash
-# Stop everything
-./hermes-stack down
-```
+| GPU support needed | No GPU devices in compose | Add a `docker-compose.gpu.yml` with NVIDIA device reservations |
 
 ---
 
