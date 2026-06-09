@@ -63,9 +63,7 @@ Each container runs under a different user ID:
 | Open WebUI | root | root |
 | CamoFox | node user | node user |
 
-Files created inside a container are owned by that container's UID on the host. If those UIDs don't match your host user, you may not be able to edit files directly.
-
-To browse and read files on the host without breaking container write access, run `chmod o+rx data/hermes` (not recursive). This lets the host traverse the directory. Individual files remain owned by the container's UID; use `sudo` to read them when needed.
+Files created inside a container are owned by that container's UID on the host.
 
 ## Available Commands
 
