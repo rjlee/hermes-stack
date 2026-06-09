@@ -321,7 +321,7 @@ up)
         $DOCKER_COMPOSE pull
     fi
 
-    $DOCKER_COMPOSE up -d
+    $DOCKER_COMPOSE up -d --wait
     ;;
 
 restart)
@@ -337,7 +337,7 @@ restart)
         $DOCKER_COMPOSE pull
     fi
 
-    $DOCKER_COMPOSE up -d
+    $DOCKER_COMPOSE up -d --wait
     ;;
 
 # -------------------------------------------------
