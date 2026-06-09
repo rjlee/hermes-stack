@@ -67,7 +67,9 @@ When you run `./hermes-stack up --upgrade`, the script pulls the latest images.
 | `./hermes-stack setup life360` | Interactive Life360 setup + install location skills |
 | `./hermes-stack setup google-workspace` | Configure Google Workspace OAuth (Gmail, Calendar, Drive) |
 | `./hermes-stack model <name>` | Switch LLM model config (e.g., `model free`) |
-| `./hermes-stack install skills` | Install everything (skills, hints, bootstrap scripts) from `./skills/`, `./hints/`, and `./bootstrap/` |
+| `./hermes-stack install skills` | Install skills from `./skills/` (includes per‑skill hints and bootstraps) |
+| `./hermes-stack install hints` | Install standalone hints from `./hints/` |
+| `./hermes-stack install bootstraps` | Install standalone bootstrap scripts from `./bootstrap/` |
 | `./hermes-stack run <command>` | Run an arbitrary command in a fresh hermes container |
 | `./hermes-stack cli` | Spawn an interactive hermes container (CLI mode) |
 | `./hermes-stack backup [--retain N] [--dry-run]` | Create a timestamped backup of `data/` and `workspace/`. Keeps the most recent 7 archives by default. |
@@ -124,11 +126,17 @@ Each skill can include:
 - `hints` — memory‑seeding hints for the agent
 - `install.sh` — a script copied to `data/hermes/.hermes-stack/bootstrap/` and run on container startup (for installing CLI tools, etc.)
 
-Run `./hermes-stack install skills` to deploy everything (skills, hints, and bootstraps).
+Run `./hermes-stack install skills` to deploy skills from `./skills/`.
 
-- **Hints**: Place standalone hints (not tied to a specific skill) in `hints/` at the repo root. They are included automatically when you run `install skills`.
-- **Bootstraps**: Place standalone bootstrap scripts (not tied to a specific skill) in `bootstrap/` at the repo root. They are included automatically when you run `install skills`. Example: `bootstrap/install-opencode.sh`.
-- **Per‑skill bootstraps**: If a skill needs a CLI tool, add an `install.sh` inside the skill directory — it gets picked up automatically. See `skills/life360/` and `skills/todoist/`.
+Each installable has its own command:
+
+| Command | Installs from | Description |
+|---------|---------------|-------------|
+| `install skills` | `./skills/` | Skills, per‑skill hints, and per‑skill bootstrap scripts |
+| `install hints` | `./hints/` | Standalone memory‑seeding hints |
+| `install bootstraps` | `./bootstrap/` | Standalone bootstrap scripts (e.g. `install-opencode.sh`) |
+
+All use `--force` to overwrite existing files.
 
 To pin a specific version (e.g. OpenCode), edit the corresponding script in `bootstrap/` (tracked in git) and change the release URL.
 
