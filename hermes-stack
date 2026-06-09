@@ -49,8 +49,7 @@ Commands:
   status           Show container status (health column).
   check-env        Validate required environment variables.
   upgrade-base     Pull the latest base image and display its digests.
-  install skills   Install skills, per‑skill hints, and bootstraps from ./skills/ and ./bootstrap/
-  install hints    Install standalone hints from ./hints/ to ./data/hermes/.hermes-stack/hints/
+  install skills   Install skills, hints, and bootstrap scripts from ./skills/, ./hints/, and ./bootstrap/
   cli             Spawn an interactive hermes container (CLI mode)
    say <message>     Send a chat message to Hermes and print the response
                    --output=json  Print full JSON response instead of plain text
@@ -819,19 +818,16 @@ install)
                         fi
                     done
                 fi
-                for group in skills/*/; do
-                    gname=$(basename "$group")
-                    if [[ -f "$group/hints" ]]; then
-                        for skill_dir in "$group"*/; do
-                            if [[ -f "$skill_dir/hints" ]]; then
-                                continue 2
-                            fi
-                        done
-                        mkdir -p data/hermes/.hermes-stack/hints
-                        cp "$group/hints" "data/hermes/.hermes-stack/hints/$gname"
-                        echo "  ✅ Hint installed: $gname"
-                    fi
-                done
+                # Install standalone hints from repo root
+                if [[ -d "hints" ]]; then
+                    mkdir -p data/hermes/.hermes-stack/hints
+                    for f in hints/*; do
+                        if [[ -f "$f" ]]; then
+                            cp "$f" "data/hermes/.hermes-stack/hints/"
+                            echo "  ✅ Installed hint: $(basename "$f")"
+                        fi
+                    done
+                fi
                 echo "Done installing skills."
                 echo ""
                 echo "ℹ️  If this skill requires configuration (e.g., MCP servers, API keys),"
@@ -841,27 +837,10 @@ install)
                 echo "No skills/ directory found in project root."
             fi
             ;;
-        hints)
-            echo "📂 Installing hints..."
-            mkdir -p data/hermes/.hermes-stack/hints
-            if [[ -d "hints" ]]; then
-                for f in hints/*; do
-                    hint_name=$(basename "$f")
-                    if [[ -f "$f" ]]; then
-                        cp "$f" "data/hermes/.hermes-stack/hints/$hint_name"
-                        echo "  ✅ Installed hint: $hint_name"
-                    fi
-                done
-                echo "Done installing hints."
-            else
-                echo "No hints/ directory found in project root."
-            fi
-            ;;
-
         *)
-            echo "Usage: $0 install {skills|hints} [--force]"
-            echo "  skills  - Install skills + hints from ./skills/ to ./data/hermes/"
-            echo "  hints   - Install hints from ./hints/ to ./data/hermes/.hermes-stack/hints/"
+            echo "Usage: $0 install skills [--force]"
+            echo "  skills  - Install skills, hints, and bootstrap scripts"
+            echo "  --force - Overwrite existing items"
             echo "  --force - Overwrite existing items"
             ;;
 
