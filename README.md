@@ -1,4 +1,4 @@
-# Hermes + OpenWebUI Stack
+# Hermes Stack
 
 ## Overview
 
