@@ -23,6 +23,9 @@ else
     DOCKER_COMPOSE="docker compose"
 fi
 
+# Compose network name (project name + network name from docker-compose.yml)
+HERMES_NETWORK="${HERMES_NETWORK:-hermes-stack_hermesnet}"
+
 print_help() {
 cat <<EOF
 hermes-stack – helper script for the hermes-stack project
@@ -450,7 +453,7 @@ cli)
     echo "🚀 Spawning interactive hermes container..."
     docker run --rm $DOCKER_FLAGS \
         --user "10000:10000" \
-        --network hermesstack_hermesnet \
+        --network "$HERMES_NETWORK" \
         --entrypoint /opt/hermes/.venv/bin/hermes \
         -e HOME=/opt/data \
         --env-file "$ROOT_ENV_FILE" \
@@ -629,7 +632,7 @@ setup)
 
     docker run --rm $DOCKER_FLAGS \
         --user "10000:10000" \
-        --network hermesstack_hermesnet \
+        --network "$HERMES_NETWORK" \
         --env-file "$ROOT_ENV_FILE" \
         -v "${WORKSPACE_DIR:-./workspace}:/workspace" \
         -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
@@ -724,7 +727,7 @@ run)
 
     echo "🚀 Spawning hermes container with: $ARGS"
     docker run --rm -it \
-        --network hermesstack_hermesnet \
+        --network "$HERMES_NETWORK" \
         --env-file "$ROOT_ENV_FILE" \
         -v "${WORKSPACE_DIR:-./workspace}:/workspace" \
         -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
