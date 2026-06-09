@@ -722,14 +722,9 @@ print('  ✅ compression.context_length removed (inherits from main)')
     ;;
 
 status)
-    echo "============================================"
-    printf "  %-30s %-10s %s\\n" "SERVICE" "STATUS" "PORTS"
-    printf "  %-30s %-10s %s\\n" "-------" "------" "-----"
-    $DOCKER_COMPOSE ps -a --format "table {{.Service}}\t{{.Status}}\t{{.Ports}}" | tail -n +2 | while IFS=$'\t' read -r svc status ports; do
-        [[ -z "$ports" ]] && ports="-"
-        printf "  %-30s %-10s %s\\n" "$svc" "$(echo "$status" | cut -d' ' -f1)" "$ports"
-    done
-    echo "============================================"
+    echo "━━━ Container Status ━━━━━━━━━━━━━━━━━━━━━━━━━"
+    $DOCKER_COMPOSE ps -a
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     ;;
 
 # -------------------------------------------------
