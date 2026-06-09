@@ -53,18 +53,6 @@ HERMES_IMAGE=nousresearch/hermes-agent:v2026.4.8
 
 When you run `./hermes-stack up --upgrade`, the script pulls the latest images.
 
-### File ownership
-
-Each container runs under a different user ID:
-
-| Service | UID | GID |
-|---|---|---|
-| Hermes | 10000 | 10000 |
-| Open WebUI | root | root |
-| CamoFox | node user | node user |
-
-Files created inside a container are owned by that container's UID on the host.
-
 ## Available Commands
 
 | Command | Description |
@@ -161,6 +149,18 @@ docker exec hermes-stack-hermes-1 opencode --version
 ```
 
 The `opencode.json` configuration lives at `data/hermes/opencode.json` and is mounted into the container at `/opt/data/opencode.json`. Edit it to change providers or models.
+
+## File Ownership
+
+Each container runs under a different user ID:
+
+| Service | UID | GID |
+|---|---|---|
+| Hermes | 10000 | 10000 |
+| Open WebUI | root | root |
+| CamoFox | node user | node user |
+
+Files created inside a container are owned by that container's UID on the host.
 
 ## Common Issues & Fixes
 
