@@ -18,3 +18,7 @@ stt:
   provider: faster-whisper
   local:
     model: base
+auxiliary:
+  compression:
+    provider: openrouter
+    model: "moonshotai/kimi-k2.6"

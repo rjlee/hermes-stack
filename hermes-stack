@@ -434,10 +434,14 @@ cli)
 
     echo "🚀 Spawning interactive hermes container..."
     docker run --rm $DOCKER_FLAGS \
+        --user 10000:10000 \
+        --entrypoint /opt/hermes/.venv/bin/hermes \
+        -e HOME=/opt/data \
         --env-file "$ROOT_ENV_FILE" \
         -v "${WORKSPACE_DIR:-./workspace}:/workspace" \
         -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
-        "$HERMES_IMAGE"
+        "$HERMES_IMAGE" \
+        --cli
     ;;
 
 reset)
@@ -568,11 +572,6 @@ setup)
         fi
     fi
 
-    if [[ ! -f data/hermes/.env ]]; then
-        echo "CAMOFOX_URL=http://camofox-browser:9377" > data/hermes/.env
-        echo "  ✅ Created data/hermes/.env with CAMOFOX_URL"
-    fi
-
     for dir in data/*/; do
         if [[ -f "$dir/.env.example" ]] && [[ ! -f "$dir/.env" ]]; then
             cp "$dir/.env.example" "$dir/.env"
@@ -618,6 +617,29 @@ setup)
         -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
         "$HERMES_IMAGE" \
         setup
+
+    echo "⚙️  Applying performance defaults..."
+
+    docker run --rm --entrypoint python3 \
+        -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
+        "$HERMES_IMAGE" \
+        -c "
+import yaml
+with open('/opt/data/config.yaml') as f:
+    config = yaml.safe_load(f)
+config.setdefault('model', {})['context_length'] = 131072
+config.setdefault('delegation', {})['max_iterations'] = 100
+config.setdefault('goals', {})['max_turns'] = 100
+# Remove compression context_length so it inherits from main model
+comp = config.get('auxiliary', {}).get('compression', {})
+comp.pop('context_length', None)
+with open('/opt/data/config.yaml', 'w') as f:
+    yaml.dump(config, f, default_flow_style=False)
+print('  ✅ model.context_length: 64000 → 131072')
+print('  ✅ delegation.max_iterations: 50 → 100')
+print('  ✅ goals.max_turns: 20 → 30')
+print('  ✅ compression.context_length: removed (inherits from main)')
+"
 
     # Fix ownership after hermes setup
     chown -R "$(id -u):$(id -g)" "${SCRIPT_DIR}/data/hermes" 2>/dev/null || true
