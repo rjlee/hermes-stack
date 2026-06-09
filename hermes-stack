@@ -49,8 +49,8 @@ Commands:
   status           Show container status (health column).
   check-env        Validate required environment variables.
   upgrade-base     Pull the latest base image and display its digests.
-  install skills   Install skills (and hints) from ./skills/ to ./data/hermes/
-  install hints    Install hints from ./hints/ to ./data/hermes/.hermes-stack/hints/
+  install skills   Install skills, per‑skill hints, and bootstraps from ./skills/ and ./bootstrap/
+  install hints    Install standalone hints from ./hints/ to ./data/hermes/.hermes-stack/hints/
   cli             Spawn an interactive hermes container (CLI mode)
    say <message>     Send a chat message to Hermes and print the response
                    --output=json  Print full JSON response instead of plain text

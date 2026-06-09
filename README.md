@@ -67,8 +67,8 @@ When you run `./hermes-stack up --upgrade`, the script pulls the latest images.
 | `./hermes-stack setup life360` | Interactive Life360 setup + install location skills |
 | `./hermes-stack setup google-workspace` | Configure Google Workspace OAuth (Gmail, Calendar, Drive) |
 | `./hermes-stack model <name>` | Switch LLM model config (e.g., `model free`) |
-| `./hermes-stack install skills` | Install skills, hints, and bootstrap scripts from `./skills/` and `./bootstrap/` |
-| `./hermes-stack install hints` | Install memory‑seeding hints from `./hints/` |
+| `./hermes-stack install skills` | Install skills, per‑skill hints, and bootstrap scripts from `./skills/` and `./bootstrap/` |
+| `./hermes-stack install hints` | Install standalone hints from `./hints/` |
 | `./hermes-stack run <command>` | Run an arbitrary command in a fresh hermes container |
 | `./hermes-stack cli` | Spawn an interactive hermes container (CLI mode) |
 | `./hermes-stack backup [--retain N] [--dry-run]` | Create a timestamped backup of `data/` and `workspace/`. Keeps the most recent 7 archives by default. |
