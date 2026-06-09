@@ -38,7 +38,8 @@ Commands:
   status           Show container status (health column).
   check-env        Validate required environment variables.
   upgrade-base     Pull the latest base image and display its digests.
-  install skills   Install skills from ./skills/ to ./data/hermes/skills/
+  install skills   Install skills (and hints) from ./skills/ to ./data/hermes/
+  install hints    Install hints from ./hints/ to ./data/hermes/.hermes-stack/hints/
   cli             Spawn an interactive hermes container (CLI mode)
   setup [subcommand]  Set up secrets in .env and run hermes setup
                   todoist - Configure Todoist API and install todoist skills
@@ -641,6 +642,43 @@ print('  ✅ goals.max_turns: 20 → 30')
 print('  ✅ compression.context_length: removed (inherits from main)')
 "
 
+    echo "📂  Installing skills and hints..."
+
+    if [[ -d "${SCRIPT_DIR}/skills" ]]; then
+        docker run --rm --entrypoint bash \
+            -v "${SCRIPT_DIR}/skills:/opt/skills:ro" \
+            -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
+            "$HERMES_IMAGE" \
+            -c "
+        for skill in /opt/skills/*/*/; do
+            category=\$(basename \"\$(dirname \"\$skill\")\")
+            name=\$(basename \"\$skill\")
+            mkdir -p \"/opt/data/skills/\$category\"
+            cp -r \"\$skill\" \"/opt/data/skills/\$category/\$name\"
+            echo \"  Installed skill: \$category/\$name\"
+            if [ -f \"\$skill/hints\" ]; then
+                mkdir -p /opt/data/.hermes-stack/hints
+                cp \"\$skill/hints\" \"/opt/data/.hermes-stack/hints/\$name\"
+                echo \"  Installed hint: \$name\"
+            fi
+        done
+        "
+    fi
+
+    if [[ -d "${SCRIPT_DIR}/hints" ]]; then
+        docker run --rm --entrypoint bash \
+            -v "${SCRIPT_DIR}/hints:/opt/hints:ro" \
+            -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
+            "$HERMES_IMAGE" \
+            -c "
+        mkdir -p /opt/data/.hermes-stack/hints
+        for f in /opt/hints/*; do
+            cp \"\$f\" \"/opt/data/.hermes-stack/hints/\$(basename \"\$f\")\"
+            echo \"  Installed hint: \$(basename \"\$f\")\"
+        done
+        "
+    fi
+
     # Fix ownership after hermes setup
     chown -R "$(id -u):$(id -g)" "${SCRIPT_DIR}/data/hermes" 2>/dev/null || true
     ;;
@@ -703,9 +741,18 @@ install)
                         echo "  ⏭️  Skipping existing: $skill_category/$skill_name (use --force)"
                     else
                         mkdir -p "data/hermes/skills/$skill_category"
-                        rm -rf "$dest_dir"  # Remove existing to avoid stale files
+                        rm -rf "$dest_dir"
                         cp -r "$skill" "$dest_dir"
                         echo "  ✅ Installed: $skill_category/$skill_name"
+                    fi
+                done
+                # Install skill-aligned hints from top-level skill dirs
+                for group in skills/*/; do
+                    gname=$(basename "$group")
+                    if [[ -f "$group/hints" ]]; then
+                        mkdir -p data/hermes/.hermes-stack/hints
+                        cp "$group/hints" "data/hermes/.hermes-stack/hints/$gname"
+                        echo "  ✅ Hint installed: $gname"
                     fi
                 done
                 echo "Done installing skills."
@@ -717,11 +764,32 @@ install)
                 echo "No skills/ directory found in project root."
             fi
             ;;
-        *)
-            echo "Usage: $0 install skills [--force]"
-            echo "  skills  - Install skills from ./skills/ to ./data/hermes/skills/"
-            echo "  --force - Overwrite existing skills"
+        hints)
+            echo "📂 Installing hints..."
+            mkdir -p data/hermes/.hermes-stack/hints
+            if [[ -d "hints" ]]; then
+                for f in hints/*; do
+                    hint_name=$(basename "$f")
+                    if [[ -f "$f" ]]; then
+                        cp "$f" "data/hermes/.hermes-stack/hints/$hint_name"
+                        echo "  ✅ Installed hint: $hint_name"
+                    fi
+                done
+                echo "Done installing hints."
+            else
+                echo "No hints/ directory found in project root."
+            fi
             ;;
+
+        *)
+            echo "Usage: $0 install {skills|hints} [--force]"
+            echo "  skills  - Install skills + hints from ./skills/ to ./data/hermes/"
+            echo "  hints   - Install hints from ./hints/ to ./data/hermes/.hermes-stack/hints/"
+            echo "  --force - Overwrite existing items"
+            ;;
+
+    esac
+    ;;
     esac
     ;;
 

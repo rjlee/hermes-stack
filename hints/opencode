@@ -1,0 +1,9 @@
+When running opencode with attached files, use this syntax:
+
+  opencode run "your message here" -f file1.md -f file2.md
+
+The message must come FIRST, before -f flags. If you put the message after -f, opencode treats it as another file path and fails with "File not found."
+
+Example:
+  cd /workspace/my-project
+  opencode run "Build the app described in prompt.md" -f prompt.md
