@@ -790,8 +790,6 @@ install)
 
     esac
     ;;
-    esac
-    ;;
 
 # -------------------------------------------------
 # Backup / Restore (restored from your original)
