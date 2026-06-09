@@ -9,14 +9,22 @@ BASE_IMAGE_NAME="nousresearch/hermes-agent:latest"
 ROOT_ENV_FILE="$(pwd)/data/.env"
 
 # Load environment variables
+# shellcheck source=/dev/null
 [[ -f "$ROOT_ENV_FILE" ]] && set -a && source "$ROOT_ENV_FILE" && set +a
 
 # Determine Hermes image
 HERMES_IMAGE="${HERMES_IMAGE:-nousresearch/hermes-agent:latest}"
 export HERMES_IMAGE
 
+# Detect $DOCKER_COMPOSE variant (modern CLI vs standalone binary)
+if command -v docker-compose &>/dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    DOCKER_COMPOSE="docker compose"
+fi
+
 print_help() {
-cat <<'EOF'
+cat <<EOF
 hermes-stack – helper script for the hermes-stack project
 
 Usage: $0 {up|down|logs|restart|backup|restore|prune|status|check-env|upgrade-base|install|help} [options]
@@ -103,7 +111,7 @@ setup_google_workspace()
     echo "  https://developers.google.com/workspace/guides/create-credentials"
     echo ""
     echo "=== Step 4: Provide credentials ==="
-    read -p "Path to client_secret.json (or press Enter to skip): " CLIENT_SECRET
+    read -r -p "Path to client_secret.json (or press Enter to skip): " CLIENT_SECRET
     if [[ -z "$CLIENT_SECRET" ]]; then
         echo "Skipped. Run this command again with the path when ready."
         return 0
@@ -116,12 +124,12 @@ setup_google_workspace()
     
     echo ""
     echo "Which services do you need? (comma-separated, or 'all'):"
-    read -p "[all]: " SERVICES
+    read -r -p "[all]: " SERVICES
     SERVICES="${SERVICES:-all}"
     
     echo ""
     echo "Use read-only scopes? (recommended for safety):"
-    read -p "[y/N]: " READONLY
+    read -r -p "[y/N]: " READONLY
     READONLY="${READONLY:-n}"
     
     ENV_FILE="data/hermes/.env"
@@ -138,7 +146,7 @@ setup_google_workspace()
         # Fix permissions
         chown -R 1000:1000 data/hermes/.google data/hermes/google_client_secret.json 2>/dev/null || true
         
-        grep -q "^GOOGLE_SETUP_SERVICES=" "$ENV_FILE" || echo "GOOGLE_SETUP_SERVICES=$SERVICES" >> "$ENV_FILE"
+        grep -q "^GOOGLE_SETUP_SERVICES=" "$ENV_FILE" || printf 'GOOGLE_SETUP_SERVICES=%s\n' "$SERVICES" >> "$ENV_FILE"
         if [[ "$READONLY" == "y" ]] || [[ "$READONLY" == "Y" ]]; then
             grep -q "^GOOGLE_READONLY=" "$ENV_FILE" || echo "GOOGLE_READONLY=true" >> "$ENV_FILE"
         fi
@@ -152,18 +160,18 @@ setup_google_workspace()
         echo "  4. Run: docker exec -e PYTHONPATH=/opt/hermes hermes-stack-hermes-1 python3 \\"
         echo "       /opt/data/skills/productivity/google-workspace/scripts/setup.py --auth-code CODE"
         echo "     (replace CODE with the code from step 3)"
-        echo "  5. Restart hermes: docker compose restart hermes"
+        echo "  5. Restart hermes: $DOCKER_COMPOSE restart hermes"
     else
         echo "  ❌ Invalid path"
         return 1
     fi
     
     echo ""
-    read -p "Restart hermes now? [y/N]: " RESTART
+    read -r -p "Restart hermes now? [y/N]: " RESTART
     if [[ "$RESTART" == "y" ]] || [[ "$RESTART" == "Y" ]]; then
         echo ""
         echo "Restarting hermes..."
-        docker compose restart hermes
+        $DOCKER_COMPOSE restart hermes
     fi
 }
 
@@ -178,7 +186,7 @@ setup_life360()
     echo "  1) Authorization token (from Life360 app)"
     echo "  2) Username + Password"
     echo ""
-    read -p "Enter choice [1]: " CHOICE
+    read -r -p "Enter choice [1]: " CHOICE
     CHOICE="${CHOICE:-1}"
     
     ENV_FILE="data/hermes/.env"
@@ -196,15 +204,19 @@ setup_life360()
         echo "5. Look for 'Authorization Token' or 'Legacy Token'"
         echo "6. Copy this token"
         echo ""
-        read -p "Enter Life360 authorization token: " LIFE360_TOKEN
+        read -r -p "Enter Life360 authorization token: " LIFE360_TOKEN
         
         if [[ -n "$LIFE360_TOKEN" ]]; then
             if [[ ! -f "$ENV_FILE" ]]; then
                 echo "# Hermes environment" > "$ENV_FILE"
             fi
-            grep -q "^LIFE360_AUTHORIZATION=" "$ENV_FILE" && \
-                sed -i "s/^LIFE360_AUTHORIZATION=.*/LIFE360_AUTHORIZATION=$LIFE360_TOKEN/" "$ENV_FILE" || \
-                echo "LIFE360_AUTHORIZATION=$LIFE360_TOKEN" >> "$ENV_FILE"
+            if grep -q "^LIFE360_AUTHORIZATION=" "$ENV_FILE" 2>/dev/null; then
+                grep -v "^LIFE360_AUTHORIZATION=" "$ENV_FILE" > "${ENV_FILE}.tmp"
+                printf 'LIFE360_AUTHORIZATION=%s\n' "$LIFE360_TOKEN" >> "${ENV_FILE}.tmp"
+                mv "${ENV_FILE}.tmp" "$ENV_FILE"
+            else
+                printf 'LIFE360_AUTHORIZATION=%s\n' "$LIFE360_TOKEN" >> "$ENV_FILE"
+            fi
             grep -q "^LIFE360_TOKEN_TYPE=" "$ENV_FILE" || echo "LIFE360_TOKEN_TYPE=Bearer" >> "$ENV_FILE"
             echo "  ✅ Saved authorization token"
         else
@@ -214,16 +226,16 @@ setup_life360()
     elif [[ "$CHOICE" == "2" ]]; then
         echo ""
         echo "=== Option 2: Username + Password ==="
-        read -p "Username (email): " LIFE360_USERNAME
-        read -s -p "Password: " LIFE360_PASSWORD
+        read -r -p "Username (email): " LIFE360_USERNAME
+        read -r -s -p "Password: " LIFE360_PASSWORD
         echo ""
         
         if [[ -n "$LIFE360_USERNAME" ]] && [[ -n "$LIFE360_PASSWORD" ]]; then
             if [[ ! -f "$ENV_FILE" ]]; then
                 echo "# Hermes environment" > "$ENV_FILE"
             fi
-            grep -q "^LIFE360_USERNAME=" "$ENV_FILE" || echo "LIFE360_USERNAME=$LIFE360_USERNAME" >> "$ENV_FILE"
-            grep -q "^LIFE360_PASSWORD=" "$ENV_FILE" || echo "LIFE360_PASSWORD=$LIFE360_PASSWORD" >> "$ENV_FILE"
+            grep -q "^LIFE360_USERNAME=" "$ENV_FILE" || printf 'LIFE360_USERNAME=%s\n' "$LIFE360_USERNAME" >> "$ENV_FILE"
+            grep -q "^LIFE360_PASSWORD=" "$ENV_FILE" || printf 'LIFE360_PASSWORD=%s\n' "$LIFE360_PASSWORD" >> "$ENV_FILE"
             grep -q "^LIFE360_CLIENT_ID=" "$ENV_FILE" || echo "LIFE360_CLIENT_ID=life360_mobile_app" >> "$ENV_FILE"
             echo "  ✅ Saved username/password"
         fi
@@ -233,11 +245,11 @@ setup_life360()
     fi
 
     echo ""
-    read -p "Restart hermes-stack now? [y/N]: " RESTART
+    read -r -p "Restart hermes-stack now? [y/N]: " RESTART
     if [[ "$RESTART" == "y" ]] || [[ "$RESTART" == "Y" ]]; then
         echo ""
         echo "Restarting hermes container..."
-        docker compose restart hermes
+        $DOCKER_COMPOSE restart hermes
     fi
 }
 
@@ -265,13 +277,15 @@ setup_todoist()
     
     ENV_FILE="data/hermes/.env"
     
-    read -p "Enter your Todoist API token: " TODOIST_API_TOKEN
+    read -r -p "Enter your Todoist API token: " TODOIST_API_TOKEN
     if [[ -n "$TODOIST_API_TOKEN" ]]; then
         if grep -q "^TODOIST_API_TOKEN=" "$ENV_FILE" 2>/dev/null; then
-            sed -i "s/^TODOIST_API_TOKEN=.*/TODOIST_API_TOKEN=$TODOIST_API_TOKEN/" "$ENV_FILE"
+            grep -v "^TODOIST_API_TOKEN=" "$ENV_FILE" > "${ENV_FILE}.tmp"
+            printf 'TODOIST_API_TOKEN=%s\n' "$TODOIST_API_TOKEN" >> "${ENV_FILE}.tmp"
+            mv "${ENV_FILE}.tmp" "$ENV_FILE"
             echo "  ✅ Updated TODOIST_API_TOKEN"
         else
-            echo "TODOIST_API_TOKEN=$TODOIST_API_TOKEN" >> "$ENV_FILE"
+            printf 'TODOIST_API_TOKEN=%s\n' "$TODOIST_API_TOKEN" >> "$ENV_FILE"
             echo "  ✅ Saved TODOIST_API_TOKEN"
         fi
     else
@@ -280,11 +294,11 @@ setup_todoist()
     fi
     
     echo ""
-    read -p "Restart hermes-stack now? [y/N]: " RESTART
+    read -r -p "Restart hermes-stack now? [y/N]: " RESTART
     if [[ "$RESTART" == "y" ]] || [[ "$RESTART" == "Y" ]]; then
         echo ""
         echo "Restarting hermes..."
-        docker compose restart hermes
+        $DOCKER_COMPOSE restart hermes
     fi
 }
 
@@ -301,10 +315,10 @@ up)
     done
 
     if [[ $UPGRADE -eq 1 ]]; then
-        docker compose pull
+        $DOCKER_COMPOSE pull
     fi
 
-    docker compose up -d
+    $DOCKER_COMPOSE up -d
     ;;
 
 restart)
@@ -314,13 +328,13 @@ restart)
         [[ "$arg" == "--upgrade" ]] && UPGRADE=1
     done
 
-    docker compose down
+    $DOCKER_COMPOSE down
 
     if [[ $UPGRADE -eq 1 ]]; then
-        docker compose pull
+        $DOCKER_COMPOSE pull
     fi
 
-    docker compose up -d
+    $DOCKER_COMPOSE up -d
     ;;
 
 # -------------------------------------------------
@@ -340,7 +354,7 @@ fix-perms)
 model)
     PROFILE_ACTION="${2:-list}"
     
-if [[ "$PROFILE_ACTION" == "list" ]] || [[ -z "$PROFILE_ACTION" ]]; then
+    if [[ "$PROFILE_ACTION" == "list" ]] || [[ -z "$PROFILE_ACTION" ]]; then
         echo "Available models:"
         for f in models/*.yaml; do
             if [[ -f "$f" ]]; then
@@ -367,7 +381,7 @@ if [[ "$PROFILE_ACTION" == "list" ]] || [[ -z "$PROFILE_ACTION" ]]; then
     mkdir -p data/hermes/.hermes-stack/models
     cp -f "$MODEL_FILE" "data/hermes/.hermes-stack/models/"
     
-    docker compose exec hermes python3 -c "
+    $DOCKER_COMPOSE exec hermes python3 -c "
 import yaml
 import sys
 
@@ -413,11 +427,11 @@ print('Model applied!')
     ;;
 
 down)
-    docker compose down
+    $DOCKER_COMPOSE down
     ;;
 
 logs)
-    docker compose logs -f
+    $DOCKER_COMPOSE logs -f
     ;;
 
 cli)
@@ -435,7 +449,8 @@ cli)
 
     echo "🚀 Spawning interactive hermes container..."
     docker run --rm $DOCKER_FLAGS \
-        --user 10000:10000 \
+        --user "10000:10000" \
+        --network hermesstack_hermesnet \
         --entrypoint /opt/hermes/.venv/bin/hermes \
         -e HOME=/opt/data \
         --env-file "$ROOT_ENV_FILE" \
@@ -473,7 +488,7 @@ reset)
                 ;;
             open-webui)
                 [[ -f data/open-webui/.env ]] && mv data/open-webui/.env data/open-webui/.env.backup && echo "  💾 Backed up data/open-webui/.env → data/open-webui/.env.backup"
-                sudo rm -rf data/open-webui/*
+                rm -rf data/open-webui/*
                 mkdir -p data/open-webui
                 git checkout data/open-webui/.gitkeep data/open-webui/.env.example 2>/dev/null || true
                 echo "  ✅ Reset data/open-webui"
@@ -518,9 +533,9 @@ setup)
                 echo "  ✅ Installed life360 skills"
             fi
             # Copy hints for memory seeding
-            if [[ -f "skills/life360/hints" ]]; then
+            if [[ -f "skills/life360/location-query/hints" ]]; then
                 mkdir -p data/hermes/.hermes-stack/hints
-                cp skills/life360/hints data/hermes/.hermes-stack/hints/location-query
+                cp skills/life360/location-query/hints data/hermes/.hermes-stack/hints/location-query
                 echo "  ✅ Installed life360 hints"
             fi
             exit $RET
@@ -537,9 +552,9 @@ setup)
                 echo "  ⚠️ No skills/todoist/ directory found"
             fi
             # Copy hints for memory seeding
-            if [[ -f "skills/todoist/hints" ]]; then
+            if [[ -f "skills/todoist/task-query/hints" ]]; then
                 mkdir -p data/hermes/.hermes-stack/hints
-                cp skills/todoist/hints data/hermes/.hermes-stack/hints/task-query
+                cp skills/todoist/task-query/hints data/hermes/.hermes-stack/hints/task-query
                 echo "  ✅ Installed todoist hints"
             fi
             exit 0
@@ -555,7 +570,7 @@ setup)
             exit $?
             ;;
         help|-h)
-            echo "Usage: $0 setup [container]"
+            echo "Usage: $0 setup [subcommand]"
             echo "  setup              - Set up .env files, generate secrets, run hermes setup"
             echo "  setup todoist      - Configure Todoist API and install todoist skills"
             echo "  setup life360     - Configure Life360 MCP and install location skills"
@@ -566,11 +581,15 @@ setup)
 
     echo "⚙️  Setting up secrets..."
 
-    if [[ ! -f "$ROOT_ENV_FILE" ]] || ! grep -q "^WORKSPACE_DIR" "$ROOT_ENV_FILE" 2>/dev/null; then
+    if [[ ! -f "$ROOT_ENV_FILE" ]]; then
         if [[ -f .env.example ]]; then
             cp .env.example "$ROOT_ENV_FILE"
             echo "  ✅ Created data/.env from template"
         fi
+    fi
+    if ! grep -q "^WORKSPACE_DIR" "$ROOT_ENV_FILE" 2>/dev/null; then
+        echo "WORKSPACE_DIR=./workspace" >> "$ROOT_ENV_FILE"
+        echo "  ✅ Added WORKSPACE_DIR to data/.env"
     fi
 
     for dir in data/*/; do
@@ -580,26 +599,23 @@ setup)
         fi
     done
 
-    if [[ -z "${API_SERVER_KEY:-}" ]]; then
+    if ! grep -q "^API_SERVER_KEY=" "$ROOT_ENV_FILE" 2>/dev/null; then
         API_SERVER_KEY=$(openssl rand -hex 32)
-        # Remove ANY line containing API_SERVER_KEY from .env
-        cat "$ROOT_ENV_FILE" | grep -v "API_SERVER_KEY" > "${ROOT_ENV_FILE}.new"
-        mv "${ROOT_ENV_FILE}.new" "$ROOT_ENV_FILE"
-        # Add new key
         echo "API_SERVER_KEY=$API_SERVER_KEY" >> "$ROOT_ENV_FILE"
         echo "  ✅ Generated API_SERVER_KEY"
     else
         echo "  ℹ️  API_SERVER_KEY already set"
     fi
 
-    echo "  ✅ Setting WEBUI_SECRET_KEY in data/open-webui/.env"
-    WEBUI_SECRET_KEY=$(openssl rand -hex 32)
-    if grep -q "^WEBUI_SECRET_KEY=" data/open-webui/.env 2>/dev/null; then
-        sed -i "s/^WEBUI_SECRET_KEY=.*/WEBUI_SECRET_KEY=$WEBUI_SECRET_KEY/" data/open-webui/.env
-    else
+    if ! grep -q "^WEBUI_SECRET_KEY=" data/open-webui/.env 2>/dev/null; then
+        WEBUI_SECRET_KEY=$(openssl rand -hex 32)
         echo "WEBUI_SECRET_KEY=$WEBUI_SECRET_KEY" >> data/open-webui/.env
+        echo "  ✅ Generated WEBUI_SECRET_KEY"
+    else
+        echo "  ℹ️  WEBUI_SECRET_KEY already set"
     fi
 
+    # shellcheck source=/dev/null
     set -a && source "$ROOT_ENV_FILE" && set +a
 
     echo ""
@@ -612,7 +628,8 @@ setup)
     fi
 
     docker run --rm $DOCKER_FLAGS \
-        --user "1000:1000" \
+        --user "10000:10000" \
+        --network hermesstack_hermesnet \
         --env-file "$ROOT_ENV_FILE" \
         -v "${WORKSPACE_DIR:-./workspace}:/workspace" \
         -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
@@ -621,7 +638,7 @@ setup)
 
     echo "⚙️  Applying performance defaults..."
 
-    docker run --rm --entrypoint python3 \
+    docker run --rm --user "10000:10000" --entrypoint python3 \
         -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
         "$HERMES_IMAGE" \
         -c "
@@ -636,10 +653,10 @@ comp = config.get('auxiliary', {}).get('compression', {})
 comp.pop('context_length', None)
 with open('/opt/data/config.yaml', 'w') as f:
     yaml.dump(config, f, default_flow_style=False)
-print('  ✅ model.context_length: 64000 → 131072')
-print('  ✅ delegation.max_iterations: 50 → 100')
-print('  ✅ goals.max_turns: 20 → 30')
-print('  ✅ compression.context_length: removed (inherits from main)')
+print('  ✅ model.context_length set to 131072')
+print('  ✅ delegation.max_iterations set to 100')
+print('  ✅ goals.max_turns set to 100')
+print('  ✅ compression.context_length removed (inherits from main)')
 "
 
     echo "📂  Installing skills and hints..."
@@ -685,7 +702,7 @@ print('  ✅ compression.context_length: removed (inherits from main)')
 
 status)
     echo "=== Container status ==="
-    docker compose ps
+    $DOCKER_COMPOSE ps
     ;;
 
 # -------------------------------------------------
@@ -712,7 +729,7 @@ run)
         -v "${WORKSPACE_DIR:-./workspace}:/workspace" \
         -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
         "$HERMES_IMAGE" \
-        $ARGS
+        "$ARGS"
     ;;
 
 # -------------------------------------------------
@@ -745,11 +762,22 @@ install)
                         cp -r "$skill" "$dest_dir"
                         echo "  ✅ Installed: $skill_category/$skill_name"
                     fi
+                    # Install per-skill hints (names hint by skill name, e.g. location-query)
+                    if [[ -f "$skill/hints" ]]; then
+                        mkdir -p data/hermes/.hermes-stack/hints
+                        cp "$skill/hints" "data/hermes/.hermes-stack/hints/$skill_name"
+                        echo "  ✅ Hint installed: $skill_name"
+                    fi
                 done
-                # Install skill-aligned hints from top-level skill dirs
+                # Install group-level hints for groups without individual skills (e.g., google-workspace)
                 for group in skills/*/; do
                     gname=$(basename "$group")
                     if [[ -f "$group/hints" ]]; then
+                        for skill_dir in "$group"*/; do
+                            if [[ -f "$skill_dir/hints" ]]; then
+                                continue 2
+                            fi
+                        done
                         mkdir -p data/hermes/.hermes-stack/hints
                         cp "$group/hints" "data/hermes/.hermes-stack/hints/$gname"
                         echo "  ✅ Hint installed: $gname"
@@ -792,9 +820,10 @@ install)
     ;;
 
 # -------------------------------------------------
-# Backup / Restore (restored from your original)
+# Backup / Restore
 # -------------------------------------------------
 backup)
+    shift  # consume the command
     # Default retain count (override via BACKUP_RETAIN_COUNT env var)
     RETAIN_COUNT=${BACKUP_RETAIN_COUNT:-7}
     DRY_RUN=0
@@ -826,26 +855,30 @@ done
     ARCHIVE="${BACKUP_DIR}/hermes-stack_${TS}.tar.gz"
 
     echo "📦 Creating backup → $ARCHIVE"
-    tar -czf "$ARCHIVE" data workspace 2>/dev/null
+    tar -czf "$ARCHIVE" data workspace 2>/dev/null || true
     echo "✅ Backup created."
 
     # Prune old backups, keep only the newest $RETAIN_COUNT files
-    TOTAL=$(ls -1 $BACKUP_DIR/hermes-stack_*.tar.gz 2>/dev/null | wc -l)
+    TOTAL=$(find "$BACKUP_DIR" -name "hermes-stack_*.tar.gz" -maxdepth 1 2>/dev/null | wc -l)
     if [[ $TOTAL -gt $RETAIN_COUNT ]]; then
         NUM_TO_DELETE=$((TOTAL - RETAIN_COUNT))
         if [[ $DRY_RUN -eq 1 ]]; then
             echo "🧪 Dry‑run: the following $NUM_TO_DELETE backup(s) would be removed:"
-            ls -1t $BACKUP_DIR/hermes-stack_*.tar.gz | tail -n $NUM_TO_DELETE
+            find "$BACKUP_DIR" -name "hermes-stack_*.tar.gz" -maxdepth 1 -printf "%T@ %p\n" 2>/dev/null | sort -rn | tail -n "$NUM_TO_DELETE" | cut -d" " -f2-
         else
             echo "🗑️  Pruning $NUM_TO_DELETE old backup(s) – keeping latest $RETAIN_COUNT"
-            ls -1t $BACKUP_DIR/hermes-stack_*.tar.gz | tail -n $NUM_TO_DELETE | xargs -r rm --
+            find "$BACKUP_DIR" -name "hermes-stack_*.tar.gz" -maxdepth 1 -printf "%T@ %p\n" 2>/dev/null | sort -rn | tail -n "$NUM_TO_DELETE" | cut -d" " -f2- | xargs -r rm --
             echo "✅ Prune complete: $NUM_TO_DELETE files removed, $RETAIN_COUNT newest retained."
         fi
     fi
     ;;
 
 restore)
-    read -p "Enter backup file (path): " f
+    read -r -p "Enter backup file (path): " f
+    if [[ ! -f "$f" ]]; then
+        echo "  ❌ File not found: $f"
+        exit 1
+    fi
     tar xzf "$f" -C .
     echo "Restored from $f"
     ;;
@@ -867,20 +900,17 @@ check-env)
     echo "Validating required environment variables..."
     MISSING=0
 
-ROOT_ENV_FILE="data/.env"
-ENVS_DIR="$(pwd)/data"
+    # shellcheck source=/dev/null
+    [[ -f "$ROOT_ENV_FILE" ]] && source "$ROOT_ENV_FILE"
+    # shellcheck source=/dev/null
+    [[ -f data/open-webui/.env ]] && source data/open-webui/.env
 
-[[ -f "$ROOT_ENV_FILE" ]] && set -a && source "$ROOT_ENV_FILE" && set +a
-    [[ -f data/open-webui/.env ]] && set -a && source data/open-webui/.env && set +a
-
-    for var in API_SERVER_KEY; do
-        if [[ -z "${!var:-}" ]]; then
-            echo "❌ $var missing in .env"
-            ((MISSING++))
-        else
-            echo "✅ $var set"
-        fi
-    done
+    if [[ -z "${API_SERVER_KEY:-}" ]]; then
+        echo "❌ API_SERVER_KEY missing in .env"
+        ((MISSING++))
+    else
+        echo "✅ API_SERVER_KEY set"
+    fi
 
     if [[ -z "${WEBUI_SECRET_KEY:-}" ]]; then
         echo "❌ WEBUI_SECRET_KEY missing in data/open-webui/.env"
@@ -902,7 +932,7 @@ upgrade-base)
     docker pull "$BASE_IMAGE_NAME"
 
     echo "🌐 Remote digest:"
-    get_remote_digest
+    get_remote_digest || echo "  (unable to fetch remote digest)"
 
     echo "💾 Local digest:"
     docker image inspect "$BASE_IMAGE_NAME" \
