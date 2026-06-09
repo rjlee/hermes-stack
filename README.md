@@ -65,7 +65,7 @@ Each container runs under a different user ID:
 
 Files created inside a container are owned by that container's UID on the host. If those UIDs don't match your host user, you may not be able to edit files directly.
 
-To make files readable on the host without changing ownership, run `chmod -R o+rX data/hermes` as root. This lets the host read files while keeping container write access intact.
+To browse and read files on the host without breaking container write access, run `chmod o+rx data/hermes` (not recursive). This lets the host traverse the directory. Individual files remain owned by the container's UID; use `sudo` to read them when needed.
 
 ## Available Commands
 
