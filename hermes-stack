@@ -537,6 +537,7 @@ setup)
             if [[ -f "skills/life360/location-query/install.sh" ]]; then
                 mkdir -p data/hermes/.hermes-stack/bootstrap
                 cp skills/life360/location-query/install.sh data/hermes/.hermes-stack/bootstrap/location-query.sh
+                chmod +x data/hermes/.hermes-stack/bootstrap/location-query.sh
                 echo "  ✅ Installed life360 install script"
             fi
             exit $RET
@@ -562,6 +563,7 @@ setup)
             if [[ -f "skills/todoist/task-query/install.sh" ]]; then
                 mkdir -p data/hermes/.hermes-stack/bootstrap
                 cp skills/todoist/task-query/install.sh data/hermes/.hermes-stack/bootstrap/task-query.sh
+                chmod +x data/hermes/.hermes-stack/bootstrap/task-query.sh
                 echo "  ✅ Installed todoist install script"
             fi
             exit 0
@@ -712,6 +714,7 @@ print('  ✅ compression.context_length removed (inherits from main)')
         mkdir -p /opt/data/.hermes-stack/bootstrap
         for f in /opt/bootstrap/*.sh; do
             cp \"\$f\" \"/opt/data/.hermes-stack/bootstrap/\"
+            chmod +x \"/opt/data/.hermes-stack/bootstrap/\$(basename \"\$f\")\"
             echo \"  Installed bootstrap: \$(basename \"\$f\")\"
         done
         "
@@ -794,6 +797,7 @@ install)
                     if [[ -f "$skill/install.sh" ]]; then
                         mkdir -p data/hermes/.hermes-stack/bootstrap
                         cp "$skill/install.sh" "data/hermes/.hermes-stack/bootstrap/$skill_name.sh"
+                        chmod +x "data/hermes/.hermes-stack/bootstrap/$skill_name.sh"
                         echo "  ✅ Install script: $skill_name"
                     fi
                 done
@@ -843,6 +847,7 @@ install)
                 for f in bootstrap/*.sh; do
                     if [[ -f "$f" ]]; then
                         cp "$f" "data/hermes/.hermes-stack/bootstrap/"
+                        chmod +x "data/hermes/.hermes-stack/bootstrap/$(basename "$f")"
                         echo "  ✅ Installed script: $(basename "$f")"
                     fi
                 done
