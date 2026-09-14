@@ -1089,6 +1089,8 @@ PY
         --warning=no-file-changed --warning=no-file-ignored \
         "${DB_EXCLUDES[@]}" \
         --exclude='data/hermes/home/.cache' \
+        --exclude='data/hermes/.npm' \
+        --exclude='data/hermes/.cache' \
         --exclude='data/hermes/home/.npm' \
         --exclude='data/hermes/home/.npm-global' \
         --exclude='data/hermes/cache' \
