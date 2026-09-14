@@ -467,9 +467,6 @@ cli)
         EXTRA_ENV="$HERMES_CLI_EXTRA_ENV"
     fi
 
-    # Docker daemon socket group so execute_code can reach the daemon
-    DOCKER_SOCK_GID=$(stat -c %g /var/run/docker.sock 2>/dev/null || echo 991)
-
     # Baked session volumes. Each is skipped when HERMES_CLI_EXTRA_VOLUMES already maps
     # the same container path (docker rejects duplicate mount targets).
     BAKED_VOLUMES=(
@@ -491,10 +488,14 @@ cli)
     done
 
     # Build docker run command with extra volumes and env vars
+    # Run as root, matching the gateway (compose user: 0:0) and the sandboxes.
+    # The gateway writes root-owned files into /opt/data (skills, curator,
+    # cron output); as uid 10000 the CLI could not read mode-600 ones. uid
+    # 10000 was never a security boundary here: the docker socket below is
+    # needed to spawn sandboxes and grants host-root regardless of uid.
     mk_docker_env_file
     docker run --rm $DOCKER_FLAGS \
-        --user "10000:10000" \
-        --group-add "$DOCKER_SOCK_GID" \
+        --user "0:0" \
         --network "$HERMES_NETWORK" \
         --entrypoint /opt/hermes/.venv/bin/hermes \
         -e HOME=/opt/data \
@@ -1220,6 +1221,28 @@ check-env)
         echo "✅ config.yaml docker_persist_across_processes: false"
     else
         echo "⚠️  config.yaml docker_persist_across_processes not false (stale sandboxes may be reused)"
+    fi
+
+    # Sandboxes must NOT get the Docker socket: even mounted :ro it is a
+    # writable API and makes any sandbox process root on the host. Only the
+    # gateway/CLI containers need it (to spawn sandboxes).
+    if sed -n '/^  docker_volumes:/,/^  [a-z]/p' "$CFG" 2>/dev/null | grep -q 'docker.sock' \
+       || printf '%s' "${TERMINAL_DOCKER_VOLUMES:-}" | grep -q 'docker.sock'; then
+        echo "❌ docker.sock is in the sandbox volume list (config.yaml docker_volumes and/or TERMINAL_DOCKER_VOLUMES) — remove it"
+        ((MISSING++))
+    else
+        echo "✅ docker.sock not exposed to sandboxes"
+    fi
+
+    # Both sandbox volume layers should carry the same list (config.yaml wins
+    # for scoped reads, .env for one-shot reads).
+    CFG_VOLS="$(sed -n '/^  docker_volumes:/,/^  [a-z]/p' "$CFG" 2>/dev/null | grep -oE '"[^"]+"' | tr -d '"' | LC_ALL=C sort)"
+    ENV_VOLS="$(printf '%s' "${TERMINAL_DOCKER_VOLUMES:-}" | python3 -c 'import json,sys; print("\n".join(sorted(json.load(sys.stdin))))' 2>/dev/null)"
+    if [[ -n "$CFG_VOLS" && "$CFG_VOLS" == "$ENV_VOLS" ]]; then
+        echo "✅ sandbox volume lists identical in config.yaml and data/.env"
+    else
+        echo "⚠️  sandbox volume lists differ between config.yaml and data/.env:"
+        diff <(printf '%s\n' "$CFG_VOLS") <(printf '%s\n' "$ENV_VOLS") | sed 's/^/     /' | head -10
     fi
 
     # API key parity: data/.env vs data/hermes/.env vs the running gateway.
