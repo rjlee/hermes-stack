@@ -1054,31 +1054,39 @@ done
     TS=$(date '+%Y%m%d_%H%M%S')
     ARCHIVE="${BACKUP_DIR}/hermes-stack_${TS}.tar.gz"
 
-    # Consistent snapshot of the live SQLite state DB (WAL mode) — tarring
-    # state.db directly while the gateway is running yields a corrupt copy.
-    STATE_DB="data/hermes/state.db"
-    STATE_SNAP="data/hermes/state.db.backup-snapshot"
-    rm -f "$STATE_SNAP"
-    if [[ -f "$STATE_DB" ]]; then
+    # Consistent snapshots of the live SQLite DBs (all WAL mode) — tarring a
+    # *.db while the gateway is running yields a torn copy. Each <name>.db is
+    # snapshotted to <name>.db.backup-snapshot; the live db/-wal/-shm files are
+    # excluded from the archive and the snapshots included instead. To restore:
+    # stop the stack, `mv <name>.db.backup-snapshot <name>.db`, delete -wal/-shm.
+    SNAP_DIR="data/hermes"
+    DB_EXCLUDES=()
+    rm -f "$SNAP_DIR"/*.db.backup-snapshot
+    for db in "$SNAP_DIR"/*.db; do
+        [[ -f "$db" ]] || continue
+        snap="${db}.backup-snapshot"
         if command -v sqlite3 >/dev/null 2>&1; then
-            sqlite3 "$STATE_DB" ".backup '$STATE_SNAP'"
+            sqlite3 "$db" ".backup '$snap'"
         else
-            python3 - "$STATE_DB" "$STATE_SNAP" <<'PY'
+            python3 - "$db" "$snap" <<'PY'
 import sqlite3, sys
 src = sqlite3.connect(sys.argv[1]); dst = sqlite3.connect(sys.argv[2])
 src.backup(dst); dst.close(); src.close()
 PY
         fi
-        echo "🗄️  SQLite snapshot → $STATE_SNAP"
-    fi
+        DB_EXCLUDES+=("--exclude=$db" "--exclude=${db}-wal" "--exclude=${db}-shm")
+    done
+    echo "🗄️  SQLite snapshots: $(ls "$SNAP_DIR"/*.db.backup-snapshot 2>/dev/null | wc -l) db(s)"
 
     echo "📦 Creating backup → $ARCHIVE"
-    # Excludes: rebuildable caches/package stores, the live DB + WAL (snapshot
-    # is included instead), and the legacy open-webui-data orphan.
-    if tar -czf "$ARCHIVE" \
-        --exclude='data/hermes/state.db' \
-        --exclude='data/hermes/state.db-wal' \
-        --exclude='data/hermes/state.db-shm' \
+    # Excludes: rebuildable caches/package stores, live DBs (+WAL) replaced by
+    # the snapshots above, and the legacy open-webui-data orphan.
+    # tar exit 1 = "file changed as we read it" (expected with a live gateway;
+    # the archive is still valid). Exit >= 2 is a real failure.
+    set +e
+    tar -czf "$ARCHIVE" \
+        --warning=no-file-changed --warning=no-file-ignored \
+        "${DB_EXCLUDES[@]}" \
         --exclude='data/hermes/home/.cache' \
         --exclude='data/hermes/home/.npm' \
         --exclude='data/hermes/home/.npm-global' \
@@ -1089,12 +1097,15 @@ PY
         --exclude='data/open-webui/cache' \
         --exclude='**/__pycache__' \
         --exclude='**/node_modules' \
-        data workspace; then
-        rm -f "$STATE_SNAP"
+        data workspace
+    rc=$?
+    set -e
+    rm -f "$SNAP_DIR"/*.db.backup-snapshot
+    if (( rc <= 1 )); then
+        (( rc == 1 )) && echo "ℹ️  Some files changed while archiving (live gateway) — archive is complete"
         echo "✅ Backup created: $(du -h "$ARCHIVE" | cut -f1)"
     else
-        rc=$?
-        rm -f "$STATE_SNAP" "$ARCHIVE"
+        rm -f "$ARCHIVE"
         echo "❌ Backup FAILED (tar exit $rc) — archive removed"
         exit "$rc"
     fi
