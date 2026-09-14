@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # -----------------------------------------------------------------
-# install-opencode.sh
+# 30-install-opencode.sh
 #   Installs the OpenCode CLI if not already present
 #   Ensures ~/.profile adds ~/.local/bin to PATH for login shells
 #   Configures OpenRouter auth from env var

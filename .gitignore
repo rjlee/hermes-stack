@@ -7,10 +7,22 @@
 !**/.env.example
 
 # Runtime data (mounted volumes)
-data/
+data/*
 workspace/
 # Optional: ignore workspace directory if you don't want it in repo
 workspace/
+# Re-allow per-service .env.example templates (safe to commit).
+# Order matters: a negation cannot re-include files under an excluded dir,
+# so each service dir is un-ignored, then re-ignored except .env.example.
+!data/hermes/
+data/hermes/*
+!data/hermes/.env.example
+!data/open-webui/
+data/open-webui/*
+!data/open-webui/.env.example
+!data/camofox-browser/
+data/camofox-browser/*
+!data/camofox-browser/.env.example
 # Python/bytecode artefacts
 __pycache__/
 *.pyc
@@ -27,3 +39,10 @@ logs/
 # Temporary files
 *~
 *.swp
+
+# Backup files from reset/upgrade commands
+*.bak*
+*.bak_*
+.backups/
+backup/
+

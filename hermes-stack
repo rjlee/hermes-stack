@@ -12,6 +12,16 @@ ROOT_ENV_FILE="$(pwd)/data/.env"
 # shellcheck source=/dev/null
 [[ -f "$ROOT_ENV_FILE" ]] && set -a && source "$ROOT_ENV_FILE" && set +a
 
+# The env file uses single-quoted JSON (so bash can `source` it). Docker's
+# --env-file parser does not strip those quotes, so build a docker-friendly
+# copy with TERMINAL_* JSON values unquoted, regenerated before each use.
+DOCKER_ENV_FILE="$(mktemp)"
+cleanup_docker_env_file() { rm -f "$DOCKER_ENV_FILE"; }
+trap cleanup_docker_env_file EXIT
+mk_docker_env_file() {
+    sed "s/^\(TERMINAL_DOCKER_VOLUMES\|TERMINAL_DOCKER_EXTRA_ARGS\)='\(.*\)'$/\1=\2/"         "$ROOT_ENV_FILE" > "$DOCKER_ENV_FILE"
+}
+
 # Determine Hermes image
 HERMES_IMAGE="${HERMES_IMAGE:-nousresearch/hermes-agent:latest}"
 export HERMES_IMAGE
@@ -52,6 +62,7 @@ Commands:
   install skills   Install skills from ./skills/ (includes per‑skill hints and bootstraps)
   install hints    Install standalone hints from ./hints/
   install bootstraps  Install standalone bootstrap scripts from ./bootstrap/
+  install hooks     Install hook handlers from ./hooks/
   cli             Spawn an interactive hermes container (CLI mode)
    say <message>     Send a chat message to Hermes and print the response
                    --output=json  Print full JSON response instead of plain text
@@ -443,14 +454,56 @@ cli)
     fi
 
     echo "🚀 Spawning interactive hermes container..."
+
+    # Parse extra volumes from HERMES_CLI_EXTRA_VOLUMES env var
+    EXTRA_VOLUMES=""
+    if [[ -n "${HERMES_CLI_EXTRA_VOLUMES:-}" ]]; then
+        EXTRA_VOLUMES="$HERMES_CLI_EXTRA_VOLUMES"
+    fi
+
+    # Parse extra env vars from HERMES_CLI_EXTRA_ENV env var
+    EXTRA_ENV=""
+    if [[ -n "${HERMES_CLI_EXTRA_ENV:-}" ]]; then
+        EXTRA_ENV="$HERMES_CLI_EXTRA_ENV"
+    fi
+
+    # Docker daemon socket group so execute_code can reach the daemon
+    DOCKER_SOCK_GID=$(stat -c %g /var/run/docker.sock 2>/dev/null || echo 991)
+
+    # Baked session volumes. Each is skipped when HERMES_CLI_EXTRA_VOLUMES already maps
+    # the same container path (docker rejects duplicate mount targets).
+    BAKED_VOLUMES=(
+        "/var/run/docker.sock:/var/run/docker.sock:ro"
+        "${SCRIPT_DIR}/data/output:/output:rw"
+        "${SCRIPT_DIR}/data/hermes-ssh:/root/.ssh:ro"
+        "/srv/kb:/kb:rw"
+        "/srv/pass:/srv/pass:ro"
+        "/srv/pass-gnupg:/srv/pass-gnupg:rw"
+    )
+    BAKED_VOLUME_ARGS=""
+    for spec in "${BAKED_VOLUMES[@]}"; do
+        target="${spec%:*}"
+        target="${target#*:}"
+        case " $EXTRA_VOLUMES " in
+            *"$target"*) : ;;
+            *) BAKED_VOLUME_ARGS="$BAKED_VOLUME_ARGS -v $spec" ;;
+        esac
+    done
+
+    # Build docker run command with extra volumes and env vars
+    mk_docker_env_file
     docker run --rm $DOCKER_FLAGS \
         --user "10000:10000" \
+        --group-add "$DOCKER_SOCK_GID" \
         --network "$HERMES_NETWORK" \
         --entrypoint /opt/hermes/.venv/bin/hermes \
         -e HOME=/opt/data \
-        --env-file "$ROOT_ENV_FILE" \
+        $EXTRA_ENV \
+        --env-file "$DOCKER_ENV_FILE" \
         -v "${WORKSPACE_DIR:-./workspace}:/workspace" \
         -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
+        $BAKED_VOLUME_ARGS \
+        $EXTRA_VOLUMES \
         "$HERMES_IMAGE" \
         --cli
     ;;
@@ -467,8 +520,21 @@ reset)
         exit 0
     fi
 
-    SERVICES="${2:-hermes open-webui camofox-browser life360-mcp}"
+    SERVICES="${2:-hermes open-webui camofox-browser}"
 
+    echo "⚠️  This will DELETE the data directories for: $SERVICES"
+    echo "   (hermes: scripts, cron jobs, skills, sessions, state.db, memories — everything under data/hermes)"
+    echo "   A backup archive will be written first via '$0 backup'."
+    echo ""
+    read -r -p "Type RESET to continue: " CONFIRM
+    if [[ "$CONFIRM" != "RESET" ]]; then
+        echo "Aborted."
+        exit 1
+    fi
+
+    echo "📦 Taking a safety backup first..."
+    "$0" backup --retain 99
+    echo ""
     echo "⚠️  Resetting data directories..."
 
     for svc in $SERVICES; do
@@ -495,12 +561,8 @@ reset)
                 git checkout data/camofox-browser/.gitkeep data/camofox-browser/.env.example 2>/dev/null || true
                 echo "  ✅ Reset data/camofox-browser"
                 ;;
-            life360-mcp)
-                [[ -f data/life360-mcp/.env ]] && mv data/life360-mcp/.env data/life360-mcp/.env.backup && echo "  💾 Backed up data/life360-mcp/.env → data/life360-mcp/.env.backup"
-                rm -rf data/life360-mcp/*
-                mkdir -p data/life360-mcp
-                git checkout data/life360-mcp/.gitkeep data/life360-mcp/.env.example 2>/dev/null || true
-                echo "  ✅ Reset data/life360-mcp"
+            *)
+                echo "  ⚠️  Unknown service '$svc' — skipped (valid: hermes open-webui camofox-browser)"
                 ;;
         esac
     done
@@ -596,6 +658,10 @@ setup)
             echo "  ✅ Created data/.env from template"
         fi
     fi
+    # Substitute @REPO_DIR@ placeholders with the actual repo path so the
+    # sandbox's host-resolved docker_volumes resolve correctly. Runs
+    # unconditionally so a data/.env regenerated by 'reset' also resolves.
+    [[ -f "$ROOT_ENV_FILE" ]] && sed -i "s|@REPO_DIR@|$(pwd)|g" "$ROOT_ENV_FILE"
     if ! grep -q "^WORKSPACE_DIR" "$ROOT_ENV_FILE" 2>/dev/null; then
         echo "WORKSPACE_DIR=./workspace" >> "$ROOT_ENV_FILE"
         echo "  ✅ Added WORKSPACE_DIR to data/.env"
@@ -636,12 +702,34 @@ setup)
         DOCKER_FLAGS="-i"
     fi
 
+    # Parse extra volumes from HERMES_CLI_EXTRA_VOLUMES env var
+    EXTRA_VOLUMES=""
+    if [[ -n "${HERMES_CLI_EXTRA_VOLUMES:-}" ]]; then
+        EXTRA_VOLUMES="$HERMES_CLI_EXTRA_VOLUMES"
+    fi
+
+    # Parse extra env vars from HERMES_CLI_EXTRA_ENV env var
+    EXTRA_ENV=""
+    if [[ -n "${HERMES_CLI_EXTRA_ENV:-}" ]]; then
+        EXTRA_ENV="$HERMES_CLI_EXTRA_ENV"
+    fi
+
+    # The container initializes hermes home as user 10000; a fresh clone owns
+    # data/hermes as the invoking user, so pre-chown or the one-shot cannot
+    # create /opt/data (HOME). Same for the mounted workspace volume.
+    mkdir -p "${SCRIPT_DIR}/data/hermes" "${WORKSPACE_DIR:-${SCRIPT_DIR}/workspace}"
+    chown -R "10000:10000" "${SCRIPT_DIR}/data/hermes" "${WORKSPACE_DIR:-${SCRIPT_DIR}/workspace}"
+
+    mk_docker_env_file
     docker run --rm $DOCKER_FLAGS \
         --user "10000:10000" \
         --network "$HERMES_NETWORK" \
-        --env-file "$ROOT_ENV_FILE" \
+        -e HOME=/opt/data \
+        $EXTRA_ENV \
+        --env-file "$DOCKER_ENV_FILE" \
         -v "${WORKSPACE_DIR:-./workspace}:/workspace" \
         -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
+        $EXTRA_VOLUMES \
         "$HERMES_IMAGE" \
         setup
 
@@ -654,6 +742,7 @@ setup)
 import yaml
 with open('/opt/data/config.yaml') as f:
     config = yaml.safe_load(f)
+config.setdefault('terminal', {})['backend'] = 'docker'
 config.setdefault('model', {})['context_length'] = 131072
 config.setdefault('delegation', {})['max_iterations'] = 100
 config.setdefault('goals', {})['max_turns'] = 100
@@ -662,6 +751,7 @@ comp = config.get('auxiliary', {}).get('compression', {})
 comp.pop('context_length', None)
 with open('/opt/data/config.yaml', 'w') as f:
     yaml.dump(config, f, default_flow_style=False)
+print('  ✅ terminal.backend set to docker')
 print('  ✅ model.context_length set to 131072')
 print('  ✅ delegation.max_iterations set to 100')
 print('  ✅ goals.max_turns set to 100')
@@ -720,6 +810,25 @@ print('  ✅ compression.context_length removed (inherits from main)')
         "
     fi
 
+    if [[ -d "${SCRIPT_DIR}/hooks" ]]; then
+        docker run --rm --entrypoint bash \
+            -v "${SCRIPT_DIR}/hooks:/opt/hooks:ro" \
+            -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
+            "$HERMES_IMAGE" \
+            -c "
+        mkdir -p /opt/data/hooks
+        for d in /opt/hooks/*/; do
+            [ -d \"\$d\" ] || continue
+            name=\$(basename \"\$d\")
+            mkdir -p \"/opt/data/hooks/\$name\"
+            for f in \"\$d\"*; do
+                [ -f \"\$f\" ] && cp \"\$f\" \"/opt/data/hooks/\$name/\$(basename \"\$f\")\"
+            done
+            echo \"  Installed hook: \$name\"
+        done
+        "
+    fi
+
     # Fix ownership after hermes setup
     chown -R "$(id -u):$(id -g)" "${SCRIPT_DIR}/data/hermes" 2>/dev/null || true
     ;;
@@ -748,11 +857,35 @@ run)
     fi
 
     echo "🚀 Spawning hermes container with: $ARGS"
-    docker run --rm -it \
+
+    # Parse extra volumes from HERMES_CLI_EXTRA_VOLUMES env var
+    EXTRA_VOLUMES=""
+    if [[ -n "${HERMES_CLI_EXTRA_VOLUMES:-}" ]]; then
+        EXTRA_VOLUMES="$HERMES_CLI_EXTRA_VOLUMES"
+    fi
+
+    # Parse extra env vars from HERMES_CLI_EXTRA_ENV env var
+    EXTRA_ENV=""
+    if [[ -n "${HERMES_CLI_EXTRA_ENV:-}" ]]; then
+        EXTRA_ENV="$HERMES_CLI_EXTRA_ENV"
+    fi
+
+    # Build docker run command with extra volumes and env vars
+    mk_docker_env_file
+    if [[ -t 0 ]]; then
+        DOCKER_FLAGS="-it"
+    else
+        DOCKER_FLAGS="-i"
+    fi
+
+    docker run --rm $DOCKER_FLAGS \
         --network "$HERMES_NETWORK" \
-        --env-file "$ROOT_ENV_FILE" \
+        -e HOME=/opt/data \
+        $EXTRA_ENV \
+        --env-file "$DOCKER_ENV_FILE" \
         -v "${WORKSPACE_DIR:-./workspace}:/workspace" \
         -v "${SCRIPT_DIR}/data/hermes:/opt/data" \
+        $EXTRA_VOLUMES \
         "$HERMES_IMAGE" \
         "$ARGS"
     ;;
@@ -856,11 +989,30 @@ install)
                 echo "No bootstrap/ directory found in project root."
             fi
             ;;
+        hooks)
+            echo "📂 Installing hooks..."
+            mkdir -p data/hermes/hooks
+            if [[ -d "hooks" ]]; then
+                for d in hooks/*/; do
+                    hook_name=$(basename "$d")
+                    mkdir -p "data/hermes/hooks/$hook_name"
+                    for f in "$d"*; do
+                        [[ -f "$f" ]] || continue
+                        cp "$f" "data/hermes/hooks/$hook_name/$(basename "$f")"
+                        echo "  ✅ Installed hook: $hook_name/$(basename "$f")"
+                    done
+                done
+                echo "Done installing hooks."
+            else
+                echo "No hooks/ directory found in project root."
+            fi
+            ;;
         *)
-            echo "Usage: $0 install {skills|hints|bootstraps} [--force]"
+            echo "Usage: $0 install {skills|hints|bootstraps|hooks} [--force]"
             echo "  skills     - Install skills from ./skills/"
             echo "  hints      - Install standalone hints from ./hints/"
             echo "  bootstraps - Install standalone scripts from ./bootstrap/"
+            echo "  hooks      - Install hook handlers from ./hooks/"
             echo "  --force    - Overwrite existing items"
             ;;
 
@@ -896,15 +1048,56 @@ backup)
         shift
 done
 
-    BACKUP_DIR="${PWD}/backup"
+    BACKUP_DIR="${BACKUP_DIR:-${PWD}/backup}"
     mkdir -p "$BACKUP_DIR"
 
     TS=$(date '+%Y%m%d_%H%M%S')
     ARCHIVE="${BACKUP_DIR}/hermes-stack_${TS}.tar.gz"
 
+    # Consistent snapshot of the live SQLite state DB (WAL mode) — tarring
+    # state.db directly while the gateway is running yields a corrupt copy.
+    STATE_DB="data/hermes/state.db"
+    STATE_SNAP="data/hermes/state.db.backup-snapshot"
+    rm -f "$STATE_SNAP"
+    if [[ -f "$STATE_DB" ]]; then
+        if command -v sqlite3 >/dev/null 2>&1; then
+            sqlite3 "$STATE_DB" ".backup '$STATE_SNAP'"
+        else
+            python3 - "$STATE_DB" "$STATE_SNAP" <<'PY'
+import sqlite3, sys
+src = sqlite3.connect(sys.argv[1]); dst = sqlite3.connect(sys.argv[2])
+src.backup(dst); dst.close(); src.close()
+PY
+        fi
+        echo "🗄️  SQLite snapshot → $STATE_SNAP"
+    fi
+
     echo "📦 Creating backup → $ARCHIVE"
-    tar -czf "$ARCHIVE" data workspace 2>/dev/null || true
-    echo "✅ Backup created."
+    # Excludes: rebuildable caches/package stores, the live DB + WAL (snapshot
+    # is included instead), and the legacy open-webui-data orphan.
+    if tar -czf "$ARCHIVE" \
+        --exclude='data/hermes/state.db' \
+        --exclude='data/hermes/state.db-wal' \
+        --exclude='data/hermes/state.db-shm' \
+        --exclude='data/hermes/home/.cache' \
+        --exclude='data/hermes/home/.npm' \
+        --exclude='data/hermes/home/.npm-global' \
+        --exclude='data/hermes/cache' \
+        --exclude='data/hermes/lazy-packages' \
+        --exclude='data/hermes/lsp' \
+        --exclude='data/hermes/open-webui-data' \
+        --exclude='data/open-webui/cache' \
+        --exclude='**/__pycache__' \
+        --exclude='**/node_modules' \
+        data workspace; then
+        rm -f "$STATE_SNAP"
+        echo "✅ Backup created: $(du -h "$ARCHIVE" | cut -f1)"
+    else
+        rc=$?
+        rm -f "$STATE_SNAP" "$ARCHIVE"
+        echo "❌ Backup FAILED (tar exit $rc) — archive removed"
+        exit "$rc"
+    fi
 
     # Prune old backups, keep only the newest $RETAIN_COUNT files
     TOTAL=$(find "$BACKUP_DIR" -name "hermes-stack_*.tar.gz" -maxdepth 1 2>/dev/null | wc -l)
@@ -967,11 +1160,82 @@ check-env)
         echo "✅ WEBUI_SECRET_KEY set"
     fi
 
+    # --- Drift / consistency checks -------------------------------------
+    echo ""
+    echo "Checking configuration consistency..."
+
+    # A root-level .env shadows data/.env for compose interpolation and is a
+    # known source of API key / path drift. It must not exist.
+    if [[ -f "${SCRIPT_DIR}/.env" ]]; then
+        echo "❌ Stray ${SCRIPT_DIR}/.env found (compose interpolation reads it; move values to data/.env and delete it)"
+        ((MISSING++))
+    else
+        echo "✅ No stray root .env"
+    fi
+
+    # TERMINAL_* values must be valid JSON once the single quotes are stripped,
+    # otherwise the docker --env-file copy silently ships a broken value.
+    for var in TERMINAL_DOCKER_VOLUMES TERMINAL_DOCKER_EXTRA_ARGS; do
+        val="${!var:-}"
+        if [[ -z "$val" ]]; then
+            echo "ℹ️  $var not set"
+        elif printf '%s' "$val" | python3 -c 'import json,sys; v=json.load(sys.stdin); sys.exit(0 if isinstance(v, list) else 1)' 2>/dev/null; then
+            echo "✅ $var is a valid JSON list"
+        else
+            echo "❌ $var is not a valid JSON list"
+            ((MISSING++))
+        fi
+    done
+
+    # /opt/data must be a symlink to the repo data root (single canonical root).
+    EXPECTED_DATA="${SCRIPT_DIR}/data/hermes"
+    if [[ -L /opt/data ]] && [[ "$(readlink -f /opt/data)" == "$(readlink -f "$EXPECTED_DATA")" ]]; then
+        echo "✅ /opt/data -> $EXPECTED_DATA"
+    else
+        echo "❌ /opt/data is not a symlink to $EXPECTED_DATA (host paths in config.yaml/.env rely on it)"
+        ((MISSING++))
+    fi
+
+    # Scoped terminal reads (TUI/gateway/cron) take sandbox mounts from
+    # config.yaml, not data/.env — make sure the list is present.
+    CFG="${SCRIPT_DIR}/data/hermes/config.yaml"
+    if grep -qE '^  docker_volumes:' "$CFG" 2>/dev/null; then
+        echo "✅ config.yaml terminal.docker_volumes present"
+    else
+        echo "❌ config.yaml terminal.docker_volumes missing (fresh sandboxes will lack /opt/data, /kb, /srv/pass)"
+        ((MISSING++))
+    fi
+    if grep -qE '^  docker_persist_across_processes: false' "$CFG" 2>/dev/null; then
+        echo "✅ config.yaml docker_persist_across_processes: false"
+    else
+        echo "⚠️  config.yaml docker_persist_across_processes not false (stale sandboxes may be reused)"
+    fi
+
+    # API key parity: data/.env vs data/hermes/.env vs the running gateway.
+    # Compose env_file order makes data/hermes/.env win, so all three must match.
+    keyhash() { printf '%s' "$1" | sha256sum | cut -c1-12; }
+    K_ROOT="${API_SERVER_KEY:-}"
+    K_PROFILE="$(grep -E '^API_SERVER_KEY=' "${SCRIPT_DIR}/data/hermes/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "\"'")"
+    K_LIVE=""
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx hermes-stack-hermes-1; then
+        K_LIVE="$(docker exec hermes-stack-hermes-1 printenv API_SERVER_KEY 2>/dev/null || true)"
+    fi
+    if [[ -n "$K_PROFILE" && "$K_ROOT" != "$K_PROFILE" ]]; then
+        echo "❌ API_SERVER_KEY differs: data/.env ($(keyhash "$K_ROOT")) vs data/hermes/.env ($(keyhash "$K_PROFILE"))"
+        ((MISSING++))
+    elif [[ -n "$K_LIVE" && "$K_ROOT" != "$K_LIVE" ]]; then
+        echo "❌ API_SERVER_KEY differs: data/.env ($(keyhash "$K_ROOT")) vs running gateway ($(keyhash "$K_LIVE")) — restart the stack"
+        ((MISSING++))
+    else
+        echo "✅ API_SERVER_KEY consistent across data/.env, data/hermes/.env${K_LIVE:+, running gateway}"
+    fi
+
+    echo ""
     if (( MISSING )); then
-        echo "Some variables are missing"
+        echo "❌ $MISSING problem(s) found"
         exit 1
     else
-        echo "All required variables are present."
+        echo "All checks passed."
     fi
     ;;
 
@@ -1008,19 +1272,25 @@ say)
         exit 1
     fi
 
-    # shellcheck source=/dev/null
-    [[ -f "$ROOT_ENV_FILE" ]] && source "$ROOT_ENV_FILE"
+    if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx hermes-stack-hermes-1; then
+        echo "❌ hermes-stack-hermes-1 is not running"
+        exit 1
+    fi
 
-    if [[ -z "${API_SERVER_KEY:-}" ]]; then
-        echo "❌ API_SERVER_KEY not found in .env"
+    # Use the key the running gateway actually has (data/hermes/.env wins in
+    # compose env_file order), so `say` cannot drift from the live gateway.
+    SAY_KEY="$(docker exec hermes-stack-hermes-1 printenv API_SERVER_KEY 2>/dev/null || true)"
+    if [[ -z "$SAY_KEY" ]]; then
+        echo "❌ Running gateway has no API_SERVER_KEY in its environment"
         exit 1
     fi
 
     echo "💬 Sending: $MESSAGE"
     echo ""
 
-    RESPONSE=$(docker exec hermes-stack-hermes-1 python3 -c "
-import json, urllib.request, sys
+    # Key is passed via the exec environment rather than interpolated into argv.
+    RESPONSE=$(docker exec -e HERMES_SAY_KEY="$SAY_KEY" hermes-stack-hermes-1 python3 -c "
+import json, os, urllib.request, sys
 msg = sys.argv[1]
 payload = json.dumps({
     'model': 'hermes',
@@ -1032,7 +1302,7 @@ req = urllib.request.Request(
     data=payload,
     headers={
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $API_SERVER_KEY'
+        'Authorization': 'Bearer ' + os.environ['HERMES_SAY_KEY']
     }
 )
 try:

@@ -1,0 +1,4 @@
+name: bootstrap
+description: Run bootstrap scripts and seed memory from hints on gateway startup
+events:
+  - gateway:startup

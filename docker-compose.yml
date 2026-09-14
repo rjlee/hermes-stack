@@ -68,6 +68,13 @@ services:
     volumes:
     - ./data/hermes:/opt/data
     - ${WORKSPACE_DIR:-./workspace}:/workspace
+    - ${OUTPUT_DIR:-./data/output}:/output
+    - /srv/kb:/kb:rw
+    - /root/.kb/env:/opt/kb-env:ro
+    - /srv/pass:/srv/pass:ro
+    - /srv/pass-gnupg:/srv/pass-gnupg:rw
+    - ./data/hermes-ssh:/root/.ssh:ro
+    - /var/run/docker.sock:/var/run/docker.sock:ro
   open-webui:
     depends_on:
       hermes:
