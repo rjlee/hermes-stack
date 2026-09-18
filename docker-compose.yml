@@ -75,6 +75,7 @@ services:
     - /srv/pass-gnupg:/srv/pass-gnupg:rw
     - ./data/hermes-ssh:/root/.ssh:ro
     - /var/run/docker.sock:/var/run/docker.sock:ro
+    - ./data/open-webui/uploads:/opt/uploads:ro
   open-webui:
     depends_on:
       hermes:

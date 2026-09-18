@@ -1,0 +1,36 @@
+{
+  "_comment": [
+    "Declarative Open WebUI settings applied by './hermes-stack configure open-webui'.",
+    "Open WebUI stores most settings as ConfigVars where the DB value WINS over the env",
+    "var, so env-only config is not reliable. This file is the source of truth.",
+    "",
+    "model_features: capabilities to force OFF (and remove from defaultFeatureIds) on the",
+    "  hermes-agent model. These are Open WebUI's OWN features (browser-side code",
+    "  interpreter, image gen, web search). They inject Open WebUI's own prompt wrappers",
+    "  which hijack the model away from Hermes' tools/skills and point it at",
+    "  /mnt/uploads/ (which does not exist for Hermes). Hermes reads uploads from",
+    "  /opt/uploads/ itself, so these must stay off.",
+    "",
+    "config: ConfigVar config_path -> value, written into the Open WebUI config table.",
+    "  rag.template      - tool-aware RAG prompt. The default template tells the model to",
+    "                      'respond using the provided context', which makes it answer",
+    "                      from a partial chunk and claim the file is missing. This",
+    "                      version instructs the model to read the original file with its",
+    "                      own tools when available.",
+    "  rag.bypass_embedding_and_retrieval - send full file text instead of top-k chunks.",
+    "  task.retrieval_query_generation    - disable the extra 'generate search queries'",
+    "                      helper call (noise + extra Hermes sessions).",
+    "  task.search_query_generation       - same for web search (also off above)."
+  ],
+  "model_features": {
+    "model_id": "hermes-agent",
+    "disable_capabilities": ["code_interpreter", "image_generation", "web_search"],
+    "clear_default_feature_ids": ["code_interpreter", "image_generation", "web_search"]
+  },
+  "config": {
+    "rag.template": "### Task:\nAnswer the user's question as accurately as possible.\n\nThe <context> block below is an AUTOMATICALLY EXTRACTED, PARTIAL text dump of the file(s) the user attached. It is frequently incomplete: it often omits whole sheets, formulas, or pages, and its numbers can be flattened or mis-ordered. Treat it as a hint, not as ground truth.\n\n### Rules:\n- If you have tools that can read the original file (terminal, execute_code, read_file, a domain skill), you MUST use them to read the full file before answering. Uploaded files are readable at /opt/uploads/ on this system.\n- Never claim you cannot access a file that the user attached until you have actually tried reading it with a tool.\n- Answer in the user's language. Cite inline as [id] only when a <source> tag carries an explicit id attribute.\n- If the context is genuinely the only source available and it does not contain the answer, say so plainly and explain what is missing.\n\n### Output:\nA clear, direct answer grounded in the real file contents.\n\n<context>\n{{CONTEXT}}\n</context>\n",
+    "rag.bypass_embedding_and_retrieval": true,
+    "task.query.retrieval.enable": false,
+    "task.query.search.enable": false
+  }
+}

@@ -40,7 +40,7 @@ print_help() {
 cat <<EOF
 hermes-stack – helper script for the hermes-stack project
 
-Usage: $0 {up|down|logs|restart|backup|restore|prune|status|check-env|upgrade-base|install|help} [options]
+Usage: $0 {up|down|logs|restart|backup|restore|prune|status|check-env|upgrade-base|install|configure|help} [options]
 
 Commands:
   up               Start the stack. Use --upgrade to pull latest images and rebuild Hermes.
@@ -70,6 +70,7 @@ Commands:
                   todoist - Configure Todoist API and install todoist skills
                   life360 - Configure Life360 MCP and install location skills
                   google-workspace - Configure Google Workspace OAuth
+  configure open-webui  Apply open-webui/config.json (disable native features, set RAG template)
   reset [services] Reset data directories (default: all services)
   help             Show this help message.
 EOF
@@ -336,6 +337,14 @@ up)
     fi
 
     $DOCKER_COMPOSE up -d --wait
+
+    # Apply declarative Open WebUI settings (model feature toggles + RAG/task
+    # config). Idempotent; skipped silently if open-webui isn't in this stack.
+    if docker ps --format '{{.Names}}' | grep -q '^hermes-stack-open-webui-1$'; then
+        "$0" configure open-webui >/dev/null 2>&1 || \
+            echo "  ⚠️  open-webui configure step failed — run '$0 configure open-webui' to see why"
+        docker compose restart open-webui >/dev/null 2>&1 || true
+    fi
     ;;
 
 restart)
@@ -352,6 +361,43 @@ restart)
     fi
 
     $DOCKER_COMPOSE up -d --wait
+    ;;
+
+# -------------------------------------------------
+# Configure - apply declarative settings to services
+# -------------------------------------------------
+configure)
+    CONFIG_TARGET="${2:-}"
+    case "$CONFIG_TARGET" in
+        open-webui)
+            CONFIG_FILE="${SCRIPT_DIR}/open-webui/config.json"
+            APPLIER="${SCRIPT_DIR}/open-webui/apply-open-webui-config.py"
+            if [[ ! -f "$CONFIG_FILE" || ! -f "$APPLIER" ]]; then
+                echo "❌ Missing ${CONFIG_FILE} or ${APPLIER}"
+                exit 1
+            fi
+            if ! docker ps --format '{{.Names}}' | grep -q '^hermes-stack-open-webui-1$'; then
+                echo "❌ open-webui container is not running — start the stack first ('$0 up')"
+                exit 1
+            fi
+            echo "⚙️  Applying Open WebUI config from open-webui/config.json..."
+            docker cp "$CONFIG_FILE" hermes-stack-open-webui-1:/tmp/owc-config.json
+            docker cp "$APPLIER" hermes-stack-open-webui-1:/tmp/apply-open-webui-config.py
+            docker exec hermes-stack-open-webui-1 python3 /tmp/apply-open-webui-config.py \
+                --config /tmp/owc-config.json
+            echo "ℹ️  Restart open-webui for ConfigVar changes to take effect:"
+            echo "    $0 restart   (or: docker compose restart open-webui)"
+            ;;
+        ""|help|-h)
+            echo "Usage: $0 configure open-webui"
+            echo "  Applies open-webui/config.json (model feature toggles + RAG/task config)"
+            echo "  to the running Open WebUI instance. Idempotent."
+            ;;
+        *)
+            echo "Unknown configure target: $CONFIG_TARGET (valid: open-webui)"
+            exit 1
+            ;;
+    esac
     ;;
 
 # -------------------------------------------------
@@ -750,6 +796,12 @@ config.setdefault('goals', {})['max_turns'] = 100
 # Remove compression context_length so it inherits from main model
 comp = config.get('auxiliary', {}).get('compression', {})
 comp.pop('context_length', None)
+# Disable auxiliary title generation. The local llama.cpp build fails to
+# compile the JSON-schema grammar the title task requires
+# ('common_sampler_init: error initializing grammar sampler' -> HTTP 400
+# 'Failed to initialize samplers'), so every turn pays 3 failed retries.
+# Titles are cosmetic; set enabled: false to stop the noise.
+config.setdefault('auxiliary', {}).setdefault('title_generation', {})['enabled'] = False
 with open('/opt/data/config.yaml', 'w') as f:
     yaml.dump(config, f, default_flow_style=False)
 print('  ✅ terminal.backend set to docker')
