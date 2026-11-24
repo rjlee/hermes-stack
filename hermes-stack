@@ -516,7 +516,6 @@ cli)
     # Baked session volumes. Each is skipped when HERMES_CLI_EXTRA_VOLUMES already maps
     # the same container path (docker rejects duplicate mount targets).
     BAKED_VOLUMES=(
-        "/var/run/docker.sock:/var/run/docker.sock:ro"
         "${SCRIPT_DIR}/data/output:/output:rw"
         "${SCRIPT_DIR}/data/hermes-ssh:/root/.ssh:ro"
         "/srv/kb:/kb:rw"
@@ -534,15 +533,15 @@ cli)
     done
 
     # Build docker run command with extra volumes and env vars
-    # Run as root, matching the gateway (compose user: 0:0) and the sandboxes.
-    # The gateway writes root-owned files into /opt/data (skills, curator,
-    # cron output); as uid 10000 the CLI could not read mode-600 ones. uid
-    # 10000 was never a security boundary here: the docker socket below is
-    # needed to spawn sandboxes and grants host-root regardless of uid.
+    # Run as uid 10000 (hermes), matching the gateway process (main-wrapper.sh
+    # drops to hermes; /opt/data and gateway.sock are 10000-owned). Share the
+    # gateway's network namespace: the control endpoint is published on the
+    # gateway's loopback (127.0.0.1:<api port>), unreachable from a separate
+    # container's netns ("Gateway connection failed; no local fallback").
     mk_docker_env_file
     docker run --rm $DOCKER_FLAGS \
-        --user "0:0" \
-        --network "$HERMES_NETWORK" \
+        --user "10000:10000" \
+        --network "container:hermes-stack-hermes-1" \
         --entrypoint /opt/hermes/.venv/bin/hermes \
         -e HOME=/opt/data \
         $EXTRA_ENV \
@@ -804,7 +803,7 @@ comp.pop('context_length', None)
 config.setdefault('auxiliary', {}).setdefault('title_generation', {})['enabled'] = False
 with open('/opt/data/config.yaml', 'w') as f:
     yaml.dump(config, f, default_flow_style=False)
-print('  ✅ terminal.backend set to docker')
+print('  ✅ terminal.backend set to local')
 print('  ✅ model.context_length set to 131072')
 print('  ✅ delegation.max_iterations set to 100')
 print('  ✅ goals.max_turns set to 100')
