@@ -3,6 +3,8 @@ import logging
 import os
 import shutil
 import subprocess
+import threading
+import time
 from pathlib import Path
 
 logger = logging.getLogger("hooks.bootstrap")
@@ -47,7 +49,6 @@ def _run_one(f):
 
 def _run():
     _run_scripts()
-    _seed_hints()
 
 def _run_scripts():
     if not BOOTSTRAP_DIR.exists():
@@ -86,22 +87,39 @@ def _seed_hints():
         logger.warning("bootstrap: no hints content, skipping")
         return
     prompt = "Remember these as persistent preferences. Only add new items - do NOT repeat anything already in your memory:\n" + content
+    timeout = 900
     try:
+        # gateway:startup awaits this hook; let it finish so `hermes chat` can
+        # attach to a ready gateway owner instead of timing out in `starting`.
+        time.sleep(5)
+        env = os.environ.copy()
+        # The s6-supervised gateway starts with only PATH in its environment;
+        # the hermes launcher uses `set -u` and needs HOME / HERMES_HOME.
+        env.setdefault("HOME", "/opt/data")
+        env.setdefault("HERMES_HOME", "/opt/data")
         result = subprocess.run(
             ["hermes", "chat", "-q", prompt],
-            timeout=300,
+            timeout=timeout,
             capture_output=True,
-            text=True
+            text=True,
+            env=env,
         )
         if result.returncode == 0:
             logger.warning("bootstrap: hints seeded successfully")
         else:
-            logger.warning("bootstrap: hints seed failed (code %d): %s", result.returncode, result.stderr[:200])
+            logger.warning(
+                "bootstrap: hints seed failed (code %d): stderr=%s stdout_tail=%s",
+                result.returncode, result.stderr[-500:], result.stdout[-1500:],
+            )
     except subprocess.TimeoutExpired:
-        logger.warning("bootstrap: hints seed timed out after 300s")
+        logger.warning("bootstrap: hints seed timed out after %ds", timeout)
     except Exception as e:
         logger.warning("bootstrap: hints seed error: %s", e)
 
 async def handle(event_type, context):
     logger.warning("bootstrap: hook triggered on %s", event_type)
     await asyncio.to_thread(_run)
+    # `hermes chat` attaches to the gateway runtime, and this hook is awaited by
+    # gateway:startup. Seeding inline would see the owner stuck in `starting`
+    # and time out after 60s, so run it once startup has completed.
+    threading.Thread(target=_seed_hints, name="hints-seed", daemon=True).start()
