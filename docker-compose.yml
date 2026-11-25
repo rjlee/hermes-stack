@@ -38,6 +38,7 @@ services:
       API_SERVER_ENABLED: 'true'
       API_SERVER_HOST: 0.0.0.0
       CAMOFOX_URL: http://camofox-browser:9377
+      NODE_EXTRA_CA_CERTS: /certs/ca.crt
       OPENCODE_PROJECT_DIR: ${WORKSPACE_DIR:-./workspace}
     healthcheck:
       interval: 30s
@@ -73,8 +74,8 @@ services:
     - /root/.kb/env:/opt/kb-env:ro
     - /srv/pass:/srv/pass:ro
     - /srv/pass-gnupg:/srv/pass-gnupg:rw
+    - /root/certs/ca.crt:/certs/ca.crt:ro
     - ./data/hermes-ssh:/root/.ssh:ro
-    - /var/run/docker.sock:/var/run/docker.sock:ro
     - ./data/open-webui/uploads:/opt/uploads:ro
   open-webui:
     depends_on:
