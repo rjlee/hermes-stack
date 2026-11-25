@@ -34,11 +34,15 @@ run_root() {
       root@docker.home "$1"
 }
 
+# uv lives under /opt/hermes/tools/uv-<version>-linux-x64/uv but is not on
+# root's PATH inside `docker exec`. Locate it in the target container.
+UV_LOOKUP='UV_BIN=""; for u in /opt/hermes/tools/uv-*/uv; do [ -x "$u" ] && UV_BIN="$u" && break; done; [ -n "$UV_BIN" ] || UV_BIN=uv'
+
 if "$VENV_PY" -c "import faster_whisper" >/dev/null 2>&1; then
   echo "[bootstrap] faster-whisper already present"
 else
   echo "[bootstrap] uv-installing into venv: ${PY_PKGS[*]}"
-  if run_root "docker exec -u 0 ${SELF} sh -c 'uv pip install --quiet --python ${VENV} ${PY_PKGS[*]}'"; then
+  if run_root "docker exec -u 0 ${SELF} sh -c '${UV_LOOKUP}; exec \"\$UV_BIN\" pip install --quiet --python ${VENV} ${PY_PKGS[*]}'"; then
     echo "[bootstrap] faster-whisper installed"
   else
     echo "[bootstrap] WARNING: uv pip install failed" >&2
